@@ -60,9 +60,9 @@ class Fern extends Singleton {
       FernCLI::boot();
     } else {
       // Boot all services
+      Mailer::boot();
       Wordpress::boot();
       Images::boot();
-      Mailer::boot();
 
       // Finally, boot the router last.
       Router::boot();

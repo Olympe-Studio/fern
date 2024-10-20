@@ -75,13 +75,20 @@ class ControllerResolver extends Singleton {
    * Validates that a controller class has the required 'handle' property.
    *
    * @param ReflectionClass $reflection
+   *
    * @throws ControllerRegistration if the class doesn't meet the requirements
    *
    * @return void
    */
   private function validateControllerClass(ReflectionClass $reflection): void {
+    $className = $reflection->getName();
+
     if (!$reflection->hasProperty('handle') || !$reflection->getProperty('handle')->isPublic() || !$reflection->getProperty('handle')->isStatic()) {
-      throw new ControllerRegistration("Controller {$reflection->getName()} must have a static public `handle` property.");
+      throw new ControllerRegistration("Controller {$className} must have a static public `handle` property.");
+    }
+
+    if (!$reflection->isSubclassOf(Singleton::class)) {
+      throw new ControllerRegistration("Controller {$className} must extend \Fern\Core\Factory\Singleton class.");
     }
   }
 

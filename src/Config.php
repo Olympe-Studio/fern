@@ -38,6 +38,7 @@ class Config extends Singleton {
       if (!is_array($value) || !array_key_exists($subKey, $value)) {
         return $default;
       }
+
       $value = $value[$subKey];
     }
 

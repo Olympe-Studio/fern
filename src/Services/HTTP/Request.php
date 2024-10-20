@@ -7,23 +7,90 @@ namespace Fern\Core\Services\HTTP;
 use Fern\Core\Factory\Singleton;
 
 class Request extends Singleton {
-  private ?int $id;
-  private $body;
-  private string $contentType;
-  private $headers;
-  private string $method;
-  private string $requestedUri;
-  private string $userAgent;
-  private $files;
-  private $query;
-  private string $url;
-  private bool $isREST;
-  private bool $isCLI;
-  private bool $isCRON;
-  private bool $isAutoSave;
-  private bool $isXMLRPC;
-  private bool $isAction;
-  private bool $isAjax;
+  /**
+  * @var int|null The ID of the current request (post, page, or term ID).
+  */
+ private ?int $id;
+
+ /**
+  * @var mixed The parsed body of the request.
+  */
+ private $body;
+
+ /**
+  * @var string The content type of the request.
+  */
+ private string $contentType;
+
+ /**
+  * @var array The headers of the request.
+  */
+ private $headers;
+
+ /**
+  * @var string The HTTP method of the request (GET, POST, etc.).
+  */
+ private string $method;
+
+ /**
+  * @var string The requested URI.
+  */
+ private string $requestedUri;
+
+ /**
+  * @var string The user agent string of the request.
+  */
+ private string $userAgent;
+
+ /**
+  * @var array The uploaded files in the request.
+  */
+ private $files;
+
+ /**
+  * @var array The query parameters of the request.
+  */
+ private $query;
+
+ /**
+  * @var string The full URL of the request.
+  */
+ private string $url;
+
+ /**
+  * @var bool Whether the current request is a REST API request.
+  */
+ private bool $isREST;
+
+ /**
+  * @var bool Whether the current request is a CLI request.
+  */
+ private bool $isCLI;
+
+ /**
+  * @var bool Whether the current request is a CRON request.
+  */
+ private bool $isCRON;
+
+ /**
+  * @var bool Whether the current request is an autosave request.
+  */
+ private bool $isAutoSave;
+
+ /**
+  * @var bool Whether the current request is an XML-RPC request.
+  */
+ private bool $isXMLRPC;
+
+ /**
+  * @var bool Whether the current request is an action request.
+  */
+ private bool $isAction;
+
+ /**
+  * @var bool Whether the current request is an AJAX request.
+  */
+ private bool $isAjax;
 
   public function __construct() {
     $this->isCLI = defined('WP_CLI') && WP_CLI;

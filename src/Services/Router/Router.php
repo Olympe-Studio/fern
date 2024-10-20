@@ -227,5 +227,5 @@ class Router extends Singleton {
       || ((!isset($disabled['feed']) || $disabled['feed'] !== false) && $this->request->isFeed())
       || ((!isset($disabled['search']) || $disabled['search'] !== false) && $this->request->isSearch())
     ;
-}
+  }
 }
