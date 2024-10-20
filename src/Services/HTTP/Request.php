@@ -652,6 +652,12 @@ class Request extends Singleton {
       'isHome' => $this->isHome(),
       'isAction' => $this->isAction(),
       'isAuthor' => $this->isAuthor(),
+      'isAttachment' => $this->isAttachment(),
+      'isCategory' => $this->isCategory(),
+      'isTag' => $this->isTag(),
+      'isTax' => $this->isTax(),
+      'isDate' => $this->isDate(),
+      'isPostTypeArchive' => $this->isPostTypeArchive(),
       'taxonomy' => $this->getTaxonomy(),
       'postType' => $this->getPostType(),
     ];
@@ -683,12 +689,67 @@ class Request extends Singleton {
   }
 
   /**
+   * Determine if the current request is an attachment.
+   *
+   * @return bool
+   */
+  public function isAttachment(): bool {
+    return is_attachment();
+  }
+
+  /**
    * Determine if the current request is a pagination.
    *
    * @return bool
    */
-  public function isPagination() {
+  public function isPagination(): bool {
     return is_paged();
+  }
+
+  /**
+   * Determine if the current request is a tag.
+   *
+   * @return bool
+   */
+  public function isTag(): bool {
+    return is_tag();
+  }
+
+  /**
+   * Check if the current request is for a custom taxonomy archive.
+   *
+   * @return bool
+   */
+  public function isTax(): bool {
+    return is_tax();
+  }
+
+  /**
+   * Check if the current request is for a post type archive.
+   *
+   * @return bool
+   */
+  public function isPostTypeArchive(): bool {
+    return is_post_type_archive();
+  }
+
+
+  /**
+   * Check if the current request is for a date-based archive.
+   *
+   * @return bool
+   */
+  public function isDate(): bool {
+    return is_date();
+  }
+
+  /**
+   * Check if the current request is for a category archive.
+   *
+   * @return bool
+   */
+  public function isCategory(): bool {
+    return is_category();
   }
 
   /**
@@ -710,11 +771,16 @@ class Request extends Singleton {
   }
 
   /**
-   * Determine if the current request is an archive request.
+   * Check if the current request is for any type of archive page.
    *
    * @return bool
    */
-  public function isArchive() {
-    return is_archive();
+  public function isArchive(): bool {
+    return $this->isCategory()
+      || $this->isTag()
+      || $this->isAuthor()
+      || $this->isDate()
+      || $this->isTax()
+      || $this->isPostTypeArchive();
   }
 }

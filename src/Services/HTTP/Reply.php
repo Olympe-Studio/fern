@@ -16,14 +16,16 @@ class Reply {
   private int $status;
   private bool $hijacked;
 
-  public function __construct($status = 200, $body = '') {
-    if (is_array($body)) {
-      $this->contentType = 'application/json';
-    } else {
+  public function __construct($status = 200, $body = '', $contentType = null, $headers = []) {
+    $this->contentType = $contentType ?? 'text/html';
+
+    if (is_array($body) && $contentType === null) {
+      $this->contentType = $contentType ?? 'application/json';
+    } elseif ($contentType === null && is_string($body)) {
       $this->contentType = 'text/html';
     }
 
-    $this->headers = [];
+    $this->headers = $headers;
     $this->trailers = [];
     $this->body = $body;
     $this->status = $status;

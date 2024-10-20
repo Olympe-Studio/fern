@@ -1,6 +1,6 @@
 <?php
 
-namespace Fern\Services\Controller;
+namespace Fern\Core\Services\Controller;
 
 use Fern\Core\Errors\ControllerRegistration;
 use Fern\Core\Factory\Singleton;
@@ -19,6 +19,9 @@ class ControllerResolver extends Singleton {
   /** @var string Constant for default type controller */
   private const TYPE_DEFAULT = 'default';
 
+  /** @var string Constant for 404 type controller */
+  private const TYPE_404 = '_404';
+
   /** @var array Stores registered controllers */
   private array $controllers;
 
@@ -28,6 +31,7 @@ class ControllerResolver extends Singleton {
       self::TYPE_VIEW => [],
       self::TYPE_ADMIN => [],
       self::TYPE_DEFAULT => null,
+      self::TYPE_404 => null,
     ];
   }
 
@@ -60,7 +64,8 @@ class ControllerResolver extends Singleton {
 
     $this->validateControllerClass($reflection);
 
-    $type = $this->determineControllerType($reflection);
+    $instance = $className::getInstance();
+    $type = $this->determineControllerType($reflection, $instance);
     $handle = (string) $reflection->getProperty('handle')->getValue();
 
     $this->register($type, $handle, $reflection->getName());
@@ -71,11 +76,12 @@ class ControllerResolver extends Singleton {
    *
    * @param ReflectionClass $reflection
    * @throws ControllerRegistration if the class doesn't meet the requirements
+   *
    * @return void
    */
   private function validateControllerClass(ReflectionClass $reflection): void {
-    if (!$reflection->hasProperty('handle') || !$reflection->getProperty('handle')->isPublic()) {
-      throw new ControllerRegistration("Controller {$reflection->getName()} must have a public `handle` property.");
+    if (!$reflection->hasProperty('handle') || !$reflection->getProperty('handle')->isPublic() || !$reflection->getProperty('handle')->isStatic()) {
+      throw new ControllerRegistration("Controller {$reflection->getName()} must have a static public `handle` property.");
     }
   }
 
@@ -83,14 +89,24 @@ class ControllerResolver extends Singleton {
    * Determines the type of a controller based on its properties.
    *
    * @param ReflectionClass $reflection
+   * @param object $instance
+   *
    * @return string The determined controller type
    */
   private function determineControllerType(ReflectionClass $reflection): string {
-    if ($reflection->getProperty('handle')->getValue() === '_default') {
+    $handleProperty = $reflection->getProperty('handle');
+    $handleProperty->setAccessible(true);
+    $handleValue = $handleProperty->getValue();
+
+    if ($handleValue === '_default') {
       return self::TYPE_DEFAULT;
     }
 
-    return ($reflection->hasProperty('isAdmin') && $reflection->getProperty('isAdmin')->isPublic())
+    if ($handleValue === '_404') {
+      return self::TYPE_404;
+    }
+
+    return ($reflection->hasProperty('isAdmin') && $reflection->getProperty('isAdmin')->isPublic() && $reflection->getProperty('isAdmin')->getValue())
       ? self::TYPE_ADMIN
       : self::TYPE_VIEW;
   }
@@ -110,6 +126,11 @@ class ControllerResolver extends Singleton {
       return;
     }
 
+    if ($type === self::TYPE_404) {
+      $this->controllers[self::TYPE_404] = $controller;
+      return;
+    }
+
     $handle = self::PREFIX . $handle;
     $this->controllers[$type][$handle] = $controller;
   }
@@ -120,13 +141,41 @@ class ControllerResolver extends Singleton {
    * @param string $type    The type of the controller (view, admin, or default)
    * @param string $handle  The handle of the controller
    *
-   * @return string
+   * @return string|null
    */
-  public function resolve(string $type, string $handle) {
+  public function resolve(string $type, string $handle): string|null {
     $handle = self::PREFIX . $handle;
 
-    return $this->controllers[$type][$handle]
-      ?? $this->controllers[self::TYPE_DEFAULT]
-      ?? null;
+    return $this->controllers[$type][$handle] ?? null;
+  }
+
+  /**
+   * Get the default controller.
+   *
+   * @return string|null
+   */
+  public function getDefaultController(): string|null {
+    $default = $this->controllers[self::TYPE_DEFAULT];
+
+    if (!$default) {
+      throw new ControllerRegistration('No default controller registered. Please register a default controller in  /App/Controller with handle set to `_default`.');
+    }
+
+    return $default;
+  }
+
+  /**
+   * Get the 404 controller.
+   *
+   * @return string|null
+   */
+  public function get404Controller(): string|null {
+    $notFound = $this->controllers[self::TYPE_404];
+
+    if (!$notFound) {
+      throw new ControllerRegistration('No NotFound controller registered. Please register a 404 controller in  /App/Controller with handle set to `_404`.');
+    }
+
+    return $notFound;
   }
 }

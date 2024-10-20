@@ -4,61 +4,214 @@ declare(strict_types=1);
 
 namespace Fern\Core\Services\Router;
 
+use Fern\Core\Config;
+use Fern\Core\Errors\ActionException;
+use Fern\Core\Errors\ActionNotFoundException;
+use Fern\Core\Errors\RouterException;
 use Fern\Core\Factory\Singleton;
+use Fern\Core\Services\HTTP\Reply;
 use Fern\Core\Services\HTTP\Request;
+use Fern\Core\Services\Controller\ControllerResolver;
+use Fern\Core\Wordpress\Filters;
+use ReflectionMethod;
 
+/**
+ * The Router class is responsible for resolving the request and calling the appropriate controller.
+ */
 class Router extends Singleton {
+  private const RESERVED_ACTIONS = ['handle', 'init'];
+
+  private Request $request;
+  private ControllerResolver $controllerResolver;
+  private array $config;
+
+  public function __construct() {
+    $this->request = Request::getInstance();
+    $this->config = Config::get('core.routes');
+    $this->controllerResolver = ControllerResolver::getInstance();
+  }
+
+  /**
+   * Get the config
+   *
+   * @return array
+   */
+  public function getConfig(): array {
+    return $this->config;
+  }
+
+  /**
+   * Boot the Router
+   *
+   * @return void
+   */
+  public static function boot(): void {
+    Filters::add('template_include', static function() {
+      /**
+       * Boot the controller resolver.
+       */
+      ControllerResolver::boot();
+      require_once __DIR__ . '/RouteResolver.php';
+    }, 9999, 1);
+  }
+
   /**
    * Resolves the request and calls the appropriate controller.
    *
    * @return void
    */
-  public static function resolve() {
-    $req = Request::getInstance();
+  public function resolve(): void {
+    $req = $this->request;
 
-    if (self::shouldStop($req)) {
+    if ($this->shouldStop()) {
       return;
     }
 
-    // ID Specific Controllers gets the priority
-    $id = $req->getCurrentId();
-
-    if ($req->isTerm()) {
-      $taxonomy = $req->getTaxonomy();
-      // blablabla
+    if ($this->should404()) {
+      $this->handle404();
+      return;
     }
 
-    if (!$req->isTerm()) {
-      $postType = $req->getPostType();
-      // blablabla
-    }
-
-    $controller = null;
-    if (!is_null($controller)) {
+    $controller = $this->resolveController();
+    if ($controller !== null) {
       if ($req->isGet()) {
-        // blablabla
+        $this->handleGetRequest($controller);
       }
 
       if ($req->isPost() && $req->isAction()) {
-        // blablabla
+        $this->handleActionRequest($controller);
       }
+    }
+  }
+
+  /**
+   * Resolves the controller based on the request.
+   *
+   * @return string|null
+   */
+  private function resolveController(?string $viewType = 'view'): ?string {
+    $id = $this->request->getCurrentId();
+
+    if ($id !== null) {
+      $idController = $this->controllerResolver->resolve($viewType, (string) $id);
+      if ($idController !== null) {
+        return $idController;
+      }
+    }
+
+    $type = $this->request->isTerm() ? $this->request->getTaxonomy() : $this->request->getPostType();
+
+    $typeController = $this->controllerResolver->resolve($viewType, $type);
+    if ($typeController !== null) {
+      return $typeController;
+    }
+
+    return $this->controllerResolver->getDefaultController();
+  }
+
+  /**
+   * Handles a 404 error.
+   *
+   * @return void
+   */
+  public function handle404(): void {
+    $controller = $this->controllerResolver->get404Controller();
+    $reply = $controller::getInstance()->handle($this->request);
+
+    if ($reply instanceof Reply) {
+      $reply->code(404);
+      $reply->send();
+    } else {
+      throw new RouterException("Controller handle method must return a Reply object ready to be sent.");
+    }
+  }
+
+  /**
+   * Handles an action request.
+   *
+   * @param string $controller
+   *
+   * @return void
+   */
+  private function handleActionRequest(string $ctr): void {
+    $action = $this->request->getAction();
+    $name = $action->getName();
+    $controller = $ctr::getInstance();
+
+    if ($this->isReservedOrMagicMethod($name)) {
+      throw new ActionException("Action '$name' is reserved or a magic method and cannot be used as an action name.");
+    }
+
+    if (!method_exists($controller, $name)) {
+      throw new ActionNotFoundException("Action $name not found in controller " . get_class($controller));
+    }
+
+    $reflection = new ReflectionMethod($controller, $name);
+    if (!$reflection->isPublic() || $reflection->isStatic()) {
+      throw new ActionNotFoundException("Action $name must be a public and non-static method.");
+    }
+
+    $reply = $controller->{$name}($this->request, $action);
+    $reply->send();
+  }
+
+  /**
+   * Checks if a method name is reserved or a magic method.
+   *
+   * @param string $methodName
+   * @return bool
+   */
+  private function isReservedOrMagicMethod(string $methodName): bool {
+    return in_array($methodName, self::RESERVED_ACTIONS, true) || strpos($methodName, '__') === 0;
+  }
+
+  /**
+   * Handles a GET request.
+   *
+   * @param string $controller
+   *
+   * @return void
+   */
+  private function handleGetRequest(string $controller): void {
+    $reply = $controller::getInstance()->handle($this->request);
+
+    if ($reply instanceof Reply) {
+      $reply->send();
+    } else {
+      throw new RouterException("Controller handle method must return a Reply object ready to be sent.");
     }
   }
 
   /**
    * Checks if the request should stop the router from resolving.
    *
-   * @param Request $req  The request instance.
+   * @param Request $req The request instance.
    *
    * @return bool
    */
-  private static function shouldStop(Request $req): bool {
-    return $req->isCLI()
-      || $req->isXMLRPC()
-      || $req->isAutoSave()
-      || $req->isCRON()
-      || $req->isREST()
-      || $req->isAjax()
+  private function shouldStop(): bool {
+    return $this->request->isCLI()
+      || $this->request->isXMLRPC()
+      || $this->request->isAutoSave()
+      || $this->request->isCRON()
+      || $this->request->isREST()
+      || $this->request->isAjax();
+  }
+
+  /**
+   * Checks if the request should return a 404 error.
+   *
+   * @return bool
+   */
+  private function should404(): bool {
+    $disabled = $this->getConfig();
+    $should404Author = in_array('author', $disabled, true) && $this->request->isAuthor();
+    $should404Search = in_array('search', $disabled, true) && $this->request->isSearch();
+
+    return $this->request->is404()
+      || $this->request->isAttachment()
+      || $should404Author
+      || $should404Search
     ;
   }
 }

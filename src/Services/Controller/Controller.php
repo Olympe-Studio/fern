@@ -1,6 +1,6 @@
 <?php
 
-namespace Fern\Services\Controller;
+namespace Fern\Core\Services\Controller;
 
 use Fern\Core\Services\HTTP\Reply;
 use Fern\Core\Services\HTTP\Request;

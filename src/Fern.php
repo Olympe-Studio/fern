@@ -4,8 +4,12 @@ declare(strict_types=1);
 namespace Fern\Core;
 
 use Fern\Core\Factory\Singleton;
+use Fern\Core\Services\Router\Router;
+use Fern\Core\Services\Wordpress\Images;
+use Fern\Core\Services\Wordpress\Wordpress;
 use Fern\Core\Utils\Autoloader;
 use Fern\Core\Wordpress\Events;
+use FernCLI;
 
 class Fern extends Singleton {
   const VERSION = '0.1.0';
@@ -52,8 +56,37 @@ class Fern extends Singleton {
     Autoloader::load();
 
     if (defined('WP_CLI') && WP_CLI) {
-      require_once __DIR__ . '/CLI/boot.php';
+      FernCLI::boot();
+    } else {
+      // Boot all services
+      Wordpress::boot();
+      Images::boot();
+
+      // Finally, boot the router last.
+      Router::boot();
     }
+
+    self::bootThemeSupport();
+  }
+
+  /**
+   * Boot the theme support
+   *
+   * @return void
+   */
+  private static function bootThemeSupport(): void {
+    Events::trigger('after_theme_support', static function() {
+      $themeSupport = Config::get('theme_support', []);
+
+      foreach ($themeSupport as $feature => $value) {
+        if (is_bool($value) && $value) {
+          add_theme_support($feature);
+          continue;
+        }
+
+        add_theme_support($feature, $value);
+        }
+    });
   }
 
   /**

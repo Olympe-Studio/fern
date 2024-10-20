@@ -3,13 +3,13 @@
 namespace App\Controllers\Subdir;
 
 use Fern\Core\Factory\Singleton;
+use Fern\Core\Services\Controller\Controller;
 use Fern\Core\Services\HTTP\Reply;
-use Fern\Services\Controller\Controller;
 use Fern\Core\Services\HTTP\Request;
 
 
 class NameController extends Singleton implements Controller {
-  public string $handle = 'id_or_post_type_or_taxonomy';
+  public static string $handle = 'id_or_post_type_or_taxonomy';
 
   /**
    * Handle the request and return a reply.
