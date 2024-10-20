@@ -1,0 +1,21 @@
+{
+  "name": "fern/core",
+  "description": "Yet another wordpress framework",
+  "type": "library",
+  "license": "MIT",
+  "autoload": {
+    "psr-4": {
+      "Fern\\Core\\": "src/"
+    },
+    "classmap": [
+      "src/Utils"
+    ]
+  },
+  "authors": [
+    {
+      "name": "Tanguy Magnaudet"
+    }
+  ],
+  "minimum-stability": "dev",
+  "require": {}
+}

@@ -1,0 +1,720 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Fern\Core\Services\HTTP;
+
+use Fern\Core\Factory\Singleton;
+
+class Request extends Singleton {
+  private ?int $id;
+  private $body;
+  private string $contentType;
+  private $headers;
+  private string $method;
+  private string $requestedUri;
+  private string $userAgent;
+  private $files;
+  private $query;
+  private string $url;
+  private bool $isREST;
+  private bool $isCLI;
+  private bool $isCRON;
+  private bool $isAutoSave;
+  private bool $isXMLRPC;
+  private bool $isAction;
+  private bool $isAjax;
+
+  public function __construct() {
+    $this->isCLI = defined('WP_CLI') && WP_CLI;
+    $this->id = $this->getCurrentId();
+    $this->body = '';
+    $this->contentType = '';
+    $this->parseBody();
+    $headers = function_exists('getallheaders') ? getallheaders() : [];
+    unset($headers["Cookie"]);
+    $this->headers = $headers;
+    $this->files = $_FILES;
+    $this->isREST = defined('REST_REQUEST') && REST_REQUEST;
+    $this->isAutoSave = defined('DOING_AUTOSAVE') && DOING_AUTOSAVE;
+    $this->isAjax = defined('DOING_AJAX') && DOING_AJAX;
+    $this->isXMLRPC = defined('XMLRPC_REQUEST') && XMLRPC_REQUEST;
+    $this->isCRON = ((defined('DOING_CRON') && DOING_CRON) || wp_doing_cron());
+    $this->method = $_SERVER["REQUEST_METHOD"];
+    $this->requestedUri = $_SERVER['REQUEST_URI'];
+    $this->userAgent = $_SERVER['HTTP_USER_AGENT'];
+    $this->url = untrailingslashit(get_home_url()) . $this->requestedUri;
+    $this->query = $this->parseUrlParams();
+    $this->isAction = isset($this->headers['X-Fern-Action']);
+  }
+
+  /**
+   * Checks if the current request is an action request.
+   *
+   * @return bool
+   */
+  public function isAction(): bool {
+    return $this->isAction;
+  }
+
+  /**
+   * Sets the files
+   *
+   * @return void
+   */
+  public function setFiles($files): void {
+    $this->files = $files;
+  }
+
+  /**
+   * Gets the current request TRUE ID
+   *
+   * @return int|null
+   */
+  public function getCurrentId() {
+    $queriedObject = get_queried_object();
+    $id = get_the_ID();
+
+    if (!is_null($queriedObject) && is_object($queriedObject)) {
+      $id = $queriedObject->ID ?? false;
+    }
+    $termId = null;
+
+    if (!$id) {
+      if (!is_null($queriedObject)) {
+        $termId = $queriedObject->term_id ?? null;
+        $termId = is_null($termId) ? null :  apply_filters('fern:core:http:request:queried_object', $termId);
+      }
+    }
+
+    if (!$id) {
+      $id = -1;
+    }
+
+    return (int) is_null($termId) ? $id : $termId;
+  }
+
+  /**
+   * Gets the action from the request.
+   *
+   * @return Action
+   */
+  public function getAction(): Action {
+    return new Action($this);
+  }
+
+  /**
+   * Checks if the current request is a REST request,
+   *
+   * @return bool;
+   */
+  public function isREST(): bool {
+    return $this->isREST;
+  }
+
+  /**
+   * Checks if the current request is a CLI request,
+   *
+   * @return bool;
+   */
+  public function isCLI(): bool {
+    return $this->isCLI;
+  }
+
+  /**
+   * Checks if the current request is a auto save request,
+   *
+   * @return bool;
+   */
+  public function isAutoSave(): bool {
+    return $this->isAutoSave;
+  }
+
+  /**
+   * Checks if the current request is a AJAX request,
+   *
+   * @return bool;
+   */
+  public function isAjax(): bool {
+    return $this->isAjax;
+  }
+
+  /**
+   * Checks if the current request is a CRON request, (Wordpress CRON only)
+   *
+   * @return bool;
+   */
+  public function isCRON(): bool {
+    return $this->isCRON;
+  }
+
+  /**
+   * Checks if the current request is a XMLRPC request
+   *
+   * @return bool;
+   */
+  public function isXMLRPC(): bool {
+    return $this->isXMLRPC;
+  }
+
+  /**
+   * Retrieve the value associated with the given key from the request data.
+   *
+   * @param string $key The key to retrieve the value for
+   * @return mixed|null The value associated with the key, or null if the key is not found
+   */
+  public function get(string $key) {
+    if (isset($_SERVER[$key])) {
+      return $_SERVER[$key];
+    }
+
+    return null;
+  }
+
+  /**
+   * Checks the country from which the request have been made.
+   *
+   * @return string|null
+   */
+  public function getCountryFrom(): ?string {
+    $acceptLanguage = $_SERVER['HTTP_ACCEPT_LANGUAGE'];
+    preg_match('/^[a-z]{2}-([A-Z]{2})/', $acceptLanguage, $matches);
+    return $matches[1] ?? null;
+  }
+
+  /**
+   * Parse the incomming request body and sets its content type.
+   *
+   * @return void
+   */
+  private function parseBody(): void {
+    if (!isset($_SERVER["CONTENT_TYPE"])) {
+      return;
+    }
+
+    // handles FormData javascript Objects.
+    if (isset($_SERVER["CONTENT_TYPE"]) && strpos($_SERVER["CONTENT_TYPE"], 'multipart/form-data') !== false) {
+      $this->setFiles($_FILES);
+      $body = [
+        ...$_POST,
+        ...$this->files
+      ];
+
+      $this->setContentType($_SERVER["CONTENT_TYPE"]);
+      $this->setBody($body);
+      return;
+    }
+
+    $this->setContentType($_SERVER["CONTENT_TYPE"]);
+    $body = file_get_contents('php://input');
+    $json = json_decode($body, true);
+
+    // If body is indeed valid JSON.
+    if (json_last_error() === JSON_ERROR_NONE) {
+      $this->setBody($json);
+      return;
+    }
+
+    // It is HTML
+    if (stripos($body, '<!DOCTYPE html>') !== false) {
+      $this->setBody($body);
+      return;
+    }
+
+    // it is XML
+    libxml_use_internal_errors(true);
+    $xml = @simplexml_load_string($body);
+    if ($xml) {
+      $this->setBody($body);
+    }
+  }
+
+  /**
+   * Add a URL parameter to the initial requests.
+   *
+   * @param string $name  The parameter name.
+   * @param mixed  $value The parameter value.
+   *
+   * @return Request  The current Request instance.
+   */
+  public function addUrlParam(string $name, mixed $value): Request {
+    $this->query[$name] = $value;
+    return $this;
+  }
+
+  /**
+   * Remove a URL parameter from the initial requests.
+   *
+   * @param string $name  The parameter name.
+   *
+   * @return Request  The current Request instance.
+   */
+  public function removeUrlParam(string $name): Request {
+    unset($this->query[$name]);
+    return $this;
+  }
+
+  /**
+   * Check if a URL parameter is set.
+   *
+   * @param string $name  The parameter name.
+   *
+   * @return bool  True if the param is set, false otherwise.
+   */
+  public function hasUrlParam(string $name): bool {
+    return isset($this->query[$name]);
+  }
+
+  /**
+   * Check if a URL parameter is **NOT** set.
+   *
+   * @param string $name  The parameter name.
+   *
+   * @return bool  True if the param is **NOT** set, false otherwise.
+   */
+  public function hasNotUrlParam(string $name): bool {
+    return !$this->hasUrlParam($name);
+  }
+
+  /**
+   * Sets the request Url Parameters
+   *
+   * @return array|null  An array of parsed URL parameters or null.
+   */
+  private function parseUrlParams(): ?array {
+    if ($this->isGet()) {
+      return $_GET;
+    }
+
+    if ($this->isPost()) {
+      return $_POST;
+    }
+
+    return null;
+  }
+
+  /**
+   * Sets the request content type to `html`, `xml`, `json` or `form-data`
+   *
+   * @param string $type `html`, `xml`, `json` or `form-data`. Any other type will be ignored.
+   *
+   * @return Request The current request instance.
+   */
+  public function setContentType(string $type): Request {
+    $this->contentType = $type;
+    return $this;
+  }
+
+  /**
+   * Sets the request body.
+   *
+   * @param string|array $body  The **parsed** body value.
+   *
+   * @return Request The current request instance.
+   */
+  public function setBody($body): Request {
+    $this->body = $body;
+    return $this;
+  }
+
+  /**
+   * Retrieve the current Request object.
+   *
+   * @return Request  The current request.
+   */
+  public static function getCurrent(): Request {
+    $req = self::getInstance();
+    return $req;
+  }
+
+  /**
+   * Gets the expected response code for this request
+   */
+  public function getCode(): int {
+    return is_404() ? 404 : 200;
+  }
+
+  /**
+   * Gets the page ID associated with the request.
+   *
+   * @return int|null  The wordpress page ID or NULL if the requests is handled by the Heracles Router in heracles/routes.php.
+   */
+  public function getId(): ?int {
+    return $this->id;
+  }
+
+  /**
+   * Gets the request payload.
+   *
+   * @return mixed  The parsed payload.
+   */
+  public function getBody(): mixed {
+    return $this->body;
+  }
+
+  /**
+   * Gets a body parameter.
+   *
+   * @param string $key  The parameter name.
+   *
+   * @return mixed|null  The parameter value or null if the parameter is not set.
+   */
+  public function getBodyParam(string $key) {
+    return $this->body[$key] ?? null;
+  }
+
+  /**
+   * Gets the request method.
+   *
+   * @return string  The method of the incomming request.
+   */
+  public function getMethod(): string {
+    return $this->method;
+  }
+
+  /**
+   * Checks if the current requets is a 404
+   *
+   * @return bool
+   */
+  public function is404(): bool {
+    return is_404();
+  }
+
+  /**
+   * Force the current Request to be a 404.
+   *
+   * @return never
+   */
+  public function set404(): never {
+    global $wp_query;
+    $wp_query->query = $wp_query->queried_object = $wp_query->queried_object_id = null;
+    $wp_query->set_404();
+    status_header(404);
+    header('Location:' . trailingslashit(get_home_url()) . '404-not-found');
+    nocache_headers();
+    exit;
+  }
+
+  /**
+   * Gets the request content Type.
+   *
+   * @return string.
+   */
+  public function getContentType() {
+    return $this->contentType;
+  }
+
+  /**
+   * Gets the request requested Uri
+   *
+   * @return string.
+   */
+  public function getUri(): string {
+    return $this->requestedUri;
+  }
+
+  /**
+   * Check if the request has a GET method.
+   *
+   * @return bool  True if the request has a GET method.
+   */
+  public function isGet(): bool {
+    return $this->getMethod() === 'GET';
+  }
+
+  /**
+   * Check if the request has a POST method.
+   *
+   * @return bool  True if the request has a POST method.
+   */
+  public function isPost(): bool {
+    return $this->getMethod() === 'POST';
+  }
+
+  /**
+   * Check if the request has a PUT method.
+   *
+   * @return bool  True if the request has a PUT method.
+   */
+  public function isPut(): bool {
+    return $this->getMethod() === 'PUT';
+  }
+
+  /**
+   * Check if the request has a DELETE method.
+   *
+   * @return bool  True if the request has a DELETE method.
+   */
+  public function isDelete(): bool {
+    return $this->getMethod() === 'DELETE';
+  }
+
+  /**
+   * Gets the request User Agent.
+   *
+   * @return string  The user agent data.
+   */
+  public function getUserAgent(): string {
+    return $this->userAgent;
+  }
+
+  /**
+   * Gets the request headers.
+   *
+   * @return array  An array with all headers.
+   */
+  public function getHeaders(): array {
+    return $this->headers;
+  }
+
+  /**
+   * Gets a specific header value.
+   *
+   * @param string $header  The desired header key.
+   *
+   * @return mixed|null  The provided header value or null.
+   */
+  public function getHeader(string $header) {
+    return $this->hasHeader($header)
+      ? $this->headers[$header]
+      : null;
+  }
+
+  /**
+   * Sets a header value.
+   *
+   * @param string $name   The header name.
+   * @param mixed  $value  The header value.
+   *
+   * @return Request  The current request Instance.
+   */
+  public function setHeader($name, $value): Request {
+    $this->headers[$name] = $value;
+    return $this;
+  }
+
+  /**
+   * Checks if the current requests is a hidden request
+   *
+   * return bool
+   */
+  public function isSideRequest(): bool {
+    return $this->isAjax() || $this->isRest() || $this->isCron() || $this->isCLI();
+  }
+
+
+  /**
+   * Checks if a header is set.
+   *
+   * @param string $header  The desired header key.
+   *
+   * @return bool  True if the header is set, false otherwise.
+   */
+  public function hasHeader(string $header): bool {
+    return isset($this->headers[$header]);
+  }
+
+  /**
+   * Gets the URL parameters as an array.
+   *
+   * @return array|null  The array of parameters in the URL or null.
+   */
+  public function getUrlParams(): ?array {
+    return $this->query;
+  }
+
+  /**
+   * Gets the requested URL.
+   *
+   * @return string  The full URL.
+   */
+  public function getUrl(): string {
+    return $this->url;
+  }
+
+  /**
+   * Gets a specific URL parameter.
+   *
+   * @param string $key  The param name.
+   *
+   * @return mixed  The param value.
+   */
+  public function getUrlParam(string $key): mixed {
+    return $this->query[$key] ?? null;
+  }
+
+  /**
+   * Gets the Query String (the URL parameters)
+   *
+   * @return array|null  An array of parsed querystring or null.
+   */
+  public function getQueryString(): ?array {
+    return $this->query;
+  }
+
+  /**
+   * Gets every cookies of the incomming request.
+   *
+   * @return array  An array of cookies.
+   */
+  public function getCookies() {
+    return $_COOKIE;
+  }
+
+  /**
+   * Gets a specific cookie of the incomming request.
+   *
+   * @param string $cookie  The cookie name.
+   *
+   * @return string|null  The cookie value or null if it doesn't exists.
+   */
+  public function getCookie(string $cookie): ?string {
+    return $this->getCookies()[$cookie] ?? null;
+  }
+
+  /**
+   * Checks if the current request is for the home page.
+   *
+   * @return bool True if the current request is for the home page, false otherwise.
+   */
+  public function isHome(): bool {
+    return is_home() || is_front_page();
+  }
+
+  /**
+   * Checks if the current request is for an author page.
+   *
+   * @return bool True if the current request is for an author page, false otherwise.
+   */
+  public function isAuthor(): bool {
+    return is_author();
+  }
+
+  /**
+   * Gets the current taxonomy if the request is for a term page.
+   *
+   * @return string|null The current taxonomy slug, or null if not a term page.
+   */
+  public function getTaxonomy(): ?string {
+    if ($this->isTerm()) {
+      $queriedObject = get_queried_object();
+      return $queriedObject->taxonomy ?? null;
+    }
+    return null;
+  }
+
+  /**
+   * Gets the current post type.
+   *
+   * @return string|null The current post type, or null if not in a post context.
+   */
+  public function getPostType(): ?string {
+    if (is_singular()) {
+      return get_post_type();
+    }
+
+    if (is_post_type_archive()) {
+      return get_query_var('post_type');
+    }
+
+    return null;
+  }
+
+  /**
+   * Convert the request to an array
+   *
+   * @return array
+   */
+  public function toArray(): array {
+    return [
+      'id' => $this->id,
+      'body' => $this->body,
+      'contentType' => $this->contentType,
+      'headers' => $this->headers,
+      'code' => $this->getCode(),
+      'method' => $this->method,
+      'requestedUri' => $this->requestedUri,
+      'userAgent' => $this->userAgent,
+      'cookies' => $this->getCookies(),
+      'query' => $this->query,
+      'isREST' => $this->isREST,
+      'isCLI' => $this->isCLI,
+      'isAjax' => $this->isAjax,
+      'isTerm' => $this->isTerm(),
+      'isPage' => $this->isPage(),
+      'isPagination' => $this->isPagination(),
+      'isAdmin' => $this->isAdmin(),
+      'isSearch' => $this->isSearch(),
+      'isArchive' => $this->isArchive(),
+      'isPost' => $this->isPost(),
+      'isAutoSave' => $this->isAutoSave,
+      'isHome' => $this->isHome(),
+      'isAction' => $this->isAction(),
+      'isAuthor' => $this->isAuthor(),
+      'taxonomy' => $this->getTaxonomy(),
+      'postType' => $this->getPostType(),
+    ];
+  }
+
+  /**
+   * Determine if the current request is a term.
+   *
+   * @return bool
+   */
+  public function isTerm() {
+    $queriedObject = get_queried_object();
+
+    $termId = null;
+    if (!is_null($queriedObject)) {
+      $termId = $queriedObject->term_id ?? null;
+    }
+
+    return !is_null($termId);
+  }
+
+  /**
+   * Determine if the current request is a page.
+   *
+   * @return bool
+   */
+  public function isPage() {
+    return is_page();
+  }
+
+  /**
+   * Determine if the current request is a pagination.
+   *
+   * @return bool
+   */
+  public function isPagination() {
+    return is_paged();
+  }
+
+  /**
+   * Determine if the current request is an admin request.
+   *
+   * @return bool
+   */
+  public function isAdmin() {
+    return is_admin();
+  }
+
+  /**
+   * Determine if the current request is a search request.
+   *
+   * @return bool
+   */
+  public function isSearch() {
+    return is_search();
+  }
+
+  /**
+   * Determine if the current request is an archive request.
+   *
+   * @return bool
+   */
+  public function isArchive() {
+    return is_archive();
+  }
+}
