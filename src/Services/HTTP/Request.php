@@ -651,6 +651,7 @@ class Request extends Singleton {
       'isAutoSave' => $this->isAutoSave,
       'isHome' => $this->isHome(),
       'isAction' => $this->isAction(),
+      'isFeed' => $this->isFeed(),
       'isAuthor' => $this->isAuthor(),
       'isAttachment' => $this->isAttachment(),
       'isCategory' => $this->isCategory(),
@@ -686,6 +687,15 @@ class Request extends Singleton {
    */
   public function isPage() {
     return is_page();
+  }
+
+  /**
+   * Checks if the current request is for a feed.
+   *
+   * @return bool
+   */
+  public function isFeed(): bool {
+    return is_feed();
   }
 
   /**

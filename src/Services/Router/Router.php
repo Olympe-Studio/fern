@@ -12,6 +12,7 @@ use Fern\Core\Factory\Singleton;
 use Fern\Core\Services\HTTP\Reply;
 use Fern\Core\Services\HTTP\Request;
 use Fern\Core\Services\Controller\ControllerResolver;
+use Fern\Core\Wordpress\Events;
 use Fern\Core\Wordpress\Filters;
 use ReflectionMethod;
 
@@ -61,14 +62,17 @@ class Router extends Singleton {
    * @return void
    */
   public function resolve(): void {
+    Events::trigger('qm/start', 'fern:resolve_routes');
     $req = $this->request;
 
     if ($this->shouldStop()) {
+      Events::trigger('qm/stop', 'fern:resolve_routes');
       return;
     }
 
     if ($this->should404()) {
       $this->handle404();
+      Events::trigger('qm/stop', 'fern:resolve_routes');
       return;
     }
 
@@ -100,6 +104,11 @@ class Router extends Singleton {
     }
 
     $type = $this->request->isTerm() ? $this->request->getTaxonomy() : $this->request->getPostType();
+
+    // If we are on a Page unhandled, it's going to fail.
+    if ($type === null || $type === 'page') {
+      return $this->controllerResolver->getDefaultController();
+    }
 
     $typeController = $this->controllerResolver->resolve($viewType, $type);
     if ($typeController !== null) {
@@ -195,7 +204,8 @@ class Router extends Singleton {
       || $this->request->isAutoSave()
       || $this->request->isCRON()
       || $this->request->isREST()
-      || $this->request->isAjax();
+      || $this->request->isAjax()
+    ;
   }
 
   /**
@@ -204,14 +214,18 @@ class Router extends Singleton {
    * @return bool
    */
   private function should404(): bool {
-    $disabled = $this->getConfig();
-    $should404Author = in_array('author', $disabled, true) && $this->request->isAuthor();
-    $should404Search = in_array('search', $disabled, true) && $this->request->isSearch();
+    $disabled = $this->getConfig()['disable'] ?? [];
 
     return $this->request->is404()
+      // Always return 404 for attachments as it should never create pages beside the media URL.
       || $this->request->isAttachment()
-      || $should404Author
-      || $should404Search
+      // User can disable author, tag, category and date archives.
+      || ((!isset($disabled['author_archive']) || $disabled['author_archive'] !== false) && $this->request->isAuthor())
+      || ((!isset($disabled['tag_archive']) || $disabled['tag_archive'] !== false) && $this->request->isTag())
+      || ((!isset($disabled['category_archive']) || $disabled['category_archive'] !== false) && $this->request->isCategory())
+      || ((!isset($disabled['date_archive']) || $disabled['date_archive'] !== false) && $this->request->isDate())
+      || ((!isset($disabled['feed']) || $disabled['feed'] !== false) && $this->request->isFeed())
+      || ((!isset($disabled['search']) || $disabled['search'] !== false) && $this->request->isSearch())
     ;
-  }
+}
 }

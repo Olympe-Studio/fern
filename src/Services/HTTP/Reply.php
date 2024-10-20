@@ -416,6 +416,7 @@ class Reply {
      * @param Reply $reply  The current Reply instance.
      */
     Events::trigger('fern:core:reply:has_been_sent', $this);
+    Events::trigger('qm/stop', 'fern:resolve_routes');
     exit;
   }
 }
