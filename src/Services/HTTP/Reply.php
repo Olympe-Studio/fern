@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Fern\Core\Services\HTTP;
 
+use Fern\Core\Config;
 use Fern\Core\Errors\ReplyParsingError;
 use Fern\Core\Fern;
 use Fern\Core\Wordpress\Events;
@@ -395,9 +396,8 @@ class Reply {
 
     $isChunked = $this->hasHeader('Transfer-Encoding') && $this->getHeader('Transfer-Encoding') === 'chunked';
 
-    if (Fern::isDev()) {
+    if (Fern::isDev() || Config::get('core.wp_head')) {
       wp_head();
-      echo '<!-- wp_head is only available in dev mode -->';
     }
 
     if ($isChunked) {
@@ -412,9 +412,8 @@ class Reply {
       echo $content;
     }
 
-    if (Fern::isDev()) {
+    if (Fern::isDev() || Config::get('core.wp_footer')) {
       wp_footer();
-      echo '<!-- wp_footer is only available in dev mode -->';
     }
 
     // Apply trailers if using chunked transfer
