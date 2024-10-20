@@ -3,13 +3,14 @@ declare(strict_types=1);
 
 namespace Fern\Core;
 
+use Fern\Core\CLI\FernCLI;
 use Fern\Core\Factory\Singleton;
+use Fern\Core\Services\Mailer\Mailer;
 use Fern\Core\Services\Router\Router;
 use Fern\Core\Services\Wordpress\Images;
 use Fern\Core\Services\Wordpress\Wordpress;
 use Fern\Core\Utils\Autoloader;
 use Fern\Core\Wordpress\Events;
-use FernCLI;
 
 class Fern extends Singleton {
   const VERSION = '0.1.0';
@@ -61,6 +62,7 @@ class Fern extends Singleton {
       // Boot all services
       Wordpress::boot();
       Images::boot();
+      Mailer::boot();
 
       // Finally, boot the router last.
       Router::boot();
@@ -98,10 +100,12 @@ class Fern extends Singleton {
    */
   public static function defineConfig(array $config): void {
     Events::trigger('fern:core:before_boot');
+    Events::trigger('qm/start', 'fern:boot');
 
     Config::boot($config);
     self::boot();
 
+    Events::trigger('qm/stop', 'fern:boot');
     Events::trigger('fern:core:after_boot');
   }
 }
