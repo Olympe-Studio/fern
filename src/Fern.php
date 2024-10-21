@@ -56,10 +56,9 @@ class Fern extends Singleton {
   private static function boot(): void {
     Autoloader::load();
 
-    if (defined('WP_CLI') && WP_CLI) {
+    if (defined('WP_CLI') && constant('WP_CLI')) {
       FernCLI::boot();
     } else {
-      // Boot all services
       Mailer::boot();
       Wordpress::boot();
       Images::boot();

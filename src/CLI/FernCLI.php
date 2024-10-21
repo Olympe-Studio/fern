@@ -2,6 +2,7 @@
 
 namespace Fern\Core\CLI;
 
+use WP_CLI;
 
 class FernCLI {
   public function __construct() {
@@ -14,7 +15,7 @@ class FernCLI {
    * @return FernCLI
    */
   public static function boot(): FernCLI {
-    if (!defined('WP_CLI') || !WP_CLI) {
+    if (!defined('WP_CLI') || !constant('WP_CLI')) {
       throw new \RuntimeException('WP CLI is not available.');
     }
 
