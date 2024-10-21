@@ -2,21 +2,40 @@
 
 declare(strict_types=1);
 
-namespace Fern\Core\Services\HTTP;
+namespace Fern\Core\Services\Actions;
 
 use Fern\Core\Services\HTTP\Request;
 
 
 class Action {
+  private static ?Action $current = null;
   private string|null $name;
   private array $args;
 
   public function __construct(Request $req) {
     $body = $req->getBody();
-    $args = $this->parseArgs($req, $body);
+    $this->init($req, $body);
+  }
 
+  public static function getCurrent(): Action {
+    if (is_null(self::$current)) {
+      self::$current = new Action(Request::getCurrent());
+    }
+
+    return self::$current;
+  }
+
+  /**
+   * Initializes the action
+   *
+   * @param Request $req  The request instance.
+   * @param array $body  The request body.
+   *
+   * @return void
+   */
+  private function init(Request $req, array $body): void {
     $this->name = $body['action'] ?? null;
-    $this->args = $args;
+    $this->args = $this->parseArgs($req, $body);
   }
 
   /**

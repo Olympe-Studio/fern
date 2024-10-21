@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Fern\Core\Services\HTTP;
 
 use Fern\Core\Factory\Singleton;
+use Fern\Core\Services\Actions\Action;
 
 class Request extends Singleton {
   /**
@@ -57,43 +58,7 @@ class Request extends Singleton {
   */
  private string $url;
 
- /**
-  * @var bool Whether the current request is a REST API request.
-  */
- private bool $isREST;
-
- /**
-  * @var bool Whether the current request is a CLI request.
-  */
- private bool $isCLI;
-
- /**
-  * @var bool Whether the current request is a CRON request.
-  */
- private bool $isCRON;
-
- /**
-  * @var bool Whether the current request is an autosave request.
-  */
- private bool $isAutoSave;
-
- /**
-  * @var bool Whether the current request is an XML-RPC request.
-  */
- private bool $isXMLRPC;
-
- /**
-  * @var bool Whether the current request is an action request.
-  */
- private bool $isAction;
-
- /**
-  * @var bool Whether the current request is an AJAX request.
-  */
- private bool $isAjax;
-
   public function __construct() {
-    $this->isCLI = defined('WP_CLI') && WP_CLI;
     $this->id = $this->getCurrentId();
     $this->body = '';
     $this->contentType = '';
@@ -102,17 +67,11 @@ class Request extends Singleton {
     unset($headers["Cookie"]);
     $this->headers = $headers;
     $this->files = $_FILES;
-    $this->isREST = defined('REST_REQUEST') && REST_REQUEST;
-    $this->isAutoSave = defined('DOING_AUTOSAVE') && DOING_AUTOSAVE;
-    $this->isAjax = defined('DOING_AJAX') && DOING_AJAX;
-    $this->isXMLRPC = defined('XMLRPC_REQUEST') && XMLRPC_REQUEST;
-    $this->isCRON = ((defined('DOING_CRON') && DOING_CRON) || wp_doing_cron());
     $this->method = $_SERVER["REQUEST_METHOD"];
     $this->requestedUri = $_SERVER['REQUEST_URI'];
     $this->userAgent = $_SERVER['HTTP_USER_AGENT'];
     $this->url = untrailingslashit(get_home_url()) . $this->requestedUri;
     $this->query = $this->parseUrlParams();
-    $this->isAction = isset($this->headers['X-Fern-Action']);
   }
 
   /**
@@ -121,7 +80,7 @@ class Request extends Singleton {
    * @return bool
    */
   public function isAction(): bool {
-    return $this->isAction;
+    return isset($this->headers['X-Fern-Action']);
   }
 
   /**
@@ -167,7 +126,7 @@ class Request extends Singleton {
    * @return Action
    */
   public function getAction(): Action {
-    return new Action($this);
+    return Action::getCurrent();
   }
 
   /**
@@ -176,7 +135,7 @@ class Request extends Singleton {
    * @return bool;
    */
   public function isREST(): bool {
-    return $this->isREST;
+    return defined('REST_REQUEST') && REST_REQUEST;
   }
 
   /**
@@ -185,7 +144,7 @@ class Request extends Singleton {
    * @return bool;
    */
   public function isCLI(): bool {
-    return $this->isCLI;
+    return defined('WP_CLI') && constant('WP_CLI');
   }
 
   /**
@@ -194,16 +153,7 @@ class Request extends Singleton {
    * @return bool;
    */
   public function isAutoSave(): bool {
-    return $this->isAutoSave;
-  }
-
-  /**
-   * Checks if the current request is a AJAX request,
-   *
-   * @return bool;
-   */
-  public function isAjax(): bool {
-    return $this->isAjax;
+    return defined('DOING_AUTOSAVE') && DOING_AUTOSAVE;
   }
 
   /**
@@ -212,7 +162,7 @@ class Request extends Singleton {
    * @return bool;
    */
   public function isCRON(): bool {
-    return $this->isCRON;
+    return wp_doing_cron();
   }
 
   /**
@@ -221,7 +171,7 @@ class Request extends Singleton {
    * @return bool;
    */
   public function isXMLRPC(): bool {
-    return $this->isXMLRPC;
+    return defined('XMLRPC_REQUEST') && XMLRPC_REQUEST;
   }
 
   /**
@@ -705,9 +655,9 @@ class Request extends Singleton {
       'userAgent' => $this->userAgent,
       'cookies' => $this->getCookies(),
       'query' => $this->query,
-      'isREST' => $this->isREST,
-      'isCLI' => $this->isCLI,
-      'isAjax' => $this->isAjax,
+      'isREST' => $this->isREST(),
+      'isCLI' => $this->isCLI(),
+      'isAjax' => $this->isAjax(),
       'isTerm' => $this->isTerm(),
       'isPage' => $this->isPage(),
       'isPagination' => $this->isPagination(),
@@ -715,7 +665,7 @@ class Request extends Singleton {
       'isSearch' => $this->isSearch(),
       'isArchive' => $this->isArchive(),
       'isPost' => $this->isPost(),
-      'isAutoSave' => $this->isAutoSave,
+      'isAutoSave' => $this->isAutoSave(),
       'isHome' => $this->isHome(),
       'isAction' => $this->isAction(),
       'isFeed' => $this->isFeed(),
@@ -763,6 +713,15 @@ class Request extends Singleton {
    */
   public function isFeed(): bool {
     return is_feed();
+  }
+
+  /**
+   * Determine if the current request is an AJAX request.
+   *
+   * @return bool
+   */
+  public function isAjax(): bool {
+    return wp_doing_ajax();
   }
 
   /**

@@ -15,6 +15,7 @@ use Fern\Core\Services\Controller\ControllerResolver;
 use Fern\Core\Wordpress\Events;
 use Fern\Core\Wordpress\Filters;
 use ReflectionMethod;
+use Throwable;
 
 /**
  * The Router class is responsible for resolving the request and calling the appropriate controller.
@@ -72,7 +73,6 @@ class Router extends Singleton {
 
     if ($this->should404()) {
       $this->handle404();
-      Events::trigger('qm/stop', 'fern:resolve_routes');
       return;
     }
 
@@ -129,8 +129,10 @@ class Router extends Singleton {
 
     if ($reply instanceof Reply) {
       $reply->code(404);
+      Events::trigger('qm/stop', 'fern:resolve_routes');
       $reply->send();
     } else {
+      Events::trigger('qm/stop', 'fern:resolve_routes');
       throw new RouterException("Controller handle method must return a Reply object ready to be sent.");
     }
   }
@@ -144,24 +146,36 @@ class Router extends Singleton {
    */
   private function handleActionRequest(string $ctr): void {
     $action = $this->request->getAction();
-    $name = $action->getName();
-    $controller = $ctr::getInstance();
 
-    if ($this->isReservedOrMagicMethod($name)) {
-      throw new ActionException("Action '$name' is reserved or a magic method and cannot be used as an action name.");
+    if ($action->isBadRequest()) {
+      $reply = new Reply(400, 'Bad Request', 'text/plain');
+      $reply->send();
+      return;
     }
 
-    if (!method_exists($controller, $name)) {
-      throw new ActionNotFoundException("Action $name not found in controller " . get_class($controller));
-    }
+    try {
+      $name = $action->getName();
+      $controller = $ctr::getInstance();
 
-    $reflection = new ReflectionMethod($controller, $name);
-    if (!$reflection->isPublic() || $reflection->isStatic()) {
-      throw new ActionNotFoundException("Action $name must be a public and non-static method.");
-    }
+      if ($this->isReservedOrMagicMethod($name)) {
+        throw new ActionException("Action '$name' is reserved or a magic method and cannot be used as an action name.");
+      }
 
-    $reply = $controller->{$name}($this->request, $action);
-    $reply->send();
+      if (!method_exists($controller, $name)) {
+        throw new ActionNotFoundException("Action $name not found in controller " . get_class($controller));
+      }
+
+      $reflection = new ReflectionMethod($controller, $name);
+      if (!$reflection->isPublic() || $reflection->isStatic()) {
+        throw new ActionNotFoundException("Action $name must be a public and non-static method.");
+      }
+
+      $reply = $controller->{$name}($this->request, $action);
+      $reply->send();
+    } catch (Throwable $e) {
+      $reply = new Reply(500, $e->getMessage(), 'text/plain');
+      $reply->send();
+    }
   }
 
   /**
@@ -204,7 +218,7 @@ class Router extends Singleton {
       || $this->request->isAutoSave()
       || $this->request->isCRON()
       || $this->request->isREST()
-      || $this->request->isAjax()
+      || ($this->request->isAjax() && !$this->request->isAction())
     ;
   }
 
@@ -214,6 +228,10 @@ class Router extends Singleton {
    * @return bool
    */
   private function should404(): bool {
+    if ($this->request->isAction()) {
+      return false;
+    }
+
     $disabled = $this->getConfig()['disable'] ?? [];
 
     return $this->request->is404()

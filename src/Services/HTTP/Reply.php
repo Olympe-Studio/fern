@@ -396,7 +396,7 @@ class Reply {
 
     $isChunked = $this->hasHeader('Transfer-Encoding') && $this->getHeader('Transfer-Encoding') === 'chunked';
 
-    if (Fern::isDev() || Config::get('core.wp_head')) {
+    if ((Fern::isDev() || Config::get('core.wp_head')) && !Request::getCurrent()->isAction()) {
       wp_head();
     }
 
@@ -412,7 +412,7 @@ class Reply {
       echo $content;
     }
 
-    if (Fern::isDev() || Config::get('core.wp_footer')) {
+    if ((Fern::isDev() || Config::get('core.wp_footer')) && !Request::getCurrent()->isAction()) {
       wp_footer();
     }
 

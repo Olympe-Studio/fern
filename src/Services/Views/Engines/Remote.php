@@ -13,8 +13,14 @@ class Remote implements RenderingEngine {
    */
   private string $url;
 
+  /**
+   * @var bool
+   */
+  private bool $sslverify;
+
   public function __construct(array $config) {
     $this->url = $config['protocol'] . '://' . $config['host'] . ':' . $config['port'];
+    $this->sslverify = $config['sslverify'] ?? false;
   }
 
   /**
@@ -54,8 +60,7 @@ class Remote implements RenderingEngine {
       'headers' => [
         'Content-Type' => 'application/json'
       ],
-      // We should not verify SSL for rendering servers
-      'sslverify' => false,
+      'sslverify' => $this->sslverify,
     ]);
 
     if (is_wp_error($response)) {
