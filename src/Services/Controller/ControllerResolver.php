@@ -4,6 +4,8 @@ namespace Fern\Core\Services\Controller;
 
 use Fern\Core\Errors\ControllerRegistration;
 use Fern\Core\Factory\Singleton;
+use Fern\Core\Services\HTTP\Request;
+use Fern\Core\Wordpress\Events;
 use ReflectionClass;
 
 class ControllerResolver extends Singleton {
@@ -46,6 +48,109 @@ class ControllerResolver extends Singleton {
 
     foreach ($declaredClasses as $className) {
       $instance->processClass($className);
+    }
+
+    Events::addHandlers('admin_menu', [$instance, 'registerAdminMenus'], 10, 0);
+  }
+
+  /**
+   * Register all admin menus from controllers
+   *
+   * @return void
+   */
+  public function registerAdminMenus(): void {
+    foreach ($this->controllers[self::TYPE_ADMIN] as $controller) {
+      $this->registerAdminMenu($controller);
+    }
+  }
+
+  /**
+   * Register admin menu for a specific controller
+   *
+   * @param string $controllerClass
+   * @return void
+   */
+  private function registerAdminMenu(string $controllerClass): void {
+    $controller = $controllerClass::getInstance();
+
+    if (!method_exists($controller, 'configure')) {
+      return;
+    }
+
+    $config = $controller->configure();
+
+    // Validate required configuration
+    if (!isset($config['page_title']) || !isset($config['menu_title'])) {
+      throw new ControllerRegistration("Admin controller {$controllerClass} must provide 'page_title' and 'menu_title' in configure()");
+    }
+
+    // Set default values for optional parameters
+    $defaults = [
+      'capability' => 'manage_options',
+      'menu_slug' => '',
+      'icon' => '',
+      'position' => null,
+      'parent_slug' => null
+    ];
+
+    $config = array_merge($defaults, $config);
+
+    // Override the menu slug with the controller's handle
+    $reflection = new ReflectionClass($controllerClass);
+    $handle = $reflection->getProperty('handle')->getValue();
+    $config['menu_slug'] = $handle;
+
+    // Override the callback with the controller's handle
+    $callback = function() use ($controller) {
+      $reply = $controller->handle(Request::getCurrent());
+      echo $reply->send();
+    };
+
+    // Register the menu based on whether it's a submenu or top-level menu
+    if ($config['parent_slug']) {
+      add_submenu_page(
+        $config['parent_slug'],
+        $config['page_title'],
+        $config['menu_title'],
+        $config['capability'],
+        $config['menu_slug'],
+        $callback
+      );
+    } else {
+      add_menu_page(
+        $config['page_title'],
+        $config['menu_title'],
+        $config['capability'],
+        $config['menu_slug'],
+        $callback,
+        $config['icon'],
+        $config['position']
+      );
+
+      // If there are submenu items defined, register them
+      if (isset($config['submenu']) && is_array($config['submenu'])) {
+        foreach ($config['submenu'] as $submenu) {
+          // Ensure required submenu fields are present
+          if (!isset($submenu['page_title']) || !isset($submenu['menu_title'])) {
+            continue;
+          }
+
+          $submenu = array_merge([
+            'capability' => $config['capability'],
+            'menu_slug' => '',
+            'callback' => $callback
+          ], $submenu);
+
+          add_submenu_page(
+            $config['menu_slug'],
+            $submenu['page_title'],
+            $submenu['menu_title'],
+            $submenu['capability'],
+            $submenu['menu_slug'],
+            $submenu['callback']
+          );
+        }
+      }
     }
   }
 
@@ -113,9 +218,12 @@ class ControllerResolver extends Singleton {
       return self::TYPE_404;
     }
 
-    return ($reflection->hasProperty('isAdmin') && $reflection->getProperty('isAdmin')->isPublic() && $reflection->getProperty('isAdmin')->getValue())
-      ? self::TYPE_ADMIN
-      : self::TYPE_VIEW;
+    $traits = $reflection->getTraitNames();
+    if (in_array('Fern\Core\Services\Controller\AdminController', $traits)) {
+      return self::TYPE_ADMIN;
+    }
+
+    return self::TYPE_VIEW;
   }
 
   /**

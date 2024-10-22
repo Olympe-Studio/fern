@@ -299,15 +299,7 @@ class Request extends Singleton {
    * @return array|null  An array of parsed URL parameters or null.
    */
   private function parseUrlParams(): ?array {
-    if ($this->isGet()) {
-      return $_GET;
-    }
-
-    if ($this->isPost()) {
-      return $_POST;
-    }
-
-    return null;
+    return $_GET;
   }
 
   /**

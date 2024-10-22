@@ -355,6 +355,11 @@ class Reply {
     }
 
 
+    $req = Request::getCurrent();
+    if ($req->isAction()) {
+      $this->setHeader('X-FERN-ACTION-REPLY', true);
+    }
+
     $this->applyHeaders();
 
     if (!headers_sent()) {
