@@ -28,4 +28,15 @@ class Events {
   public static function trigger(string $name, ...$args) {
     do_action($name, ...$args);
   }
+
+  /**
+   * Remove an event handler from the event named. Alternative of remove_action
+   *
+   * @param string|string[] $eventName The name of the event to remove the callback from.
+   *
+   * @return void
+   */
+  public static function removeHandlers(string|array $eventName) {
+    remove_all_actions($eventName);
+  }
 }

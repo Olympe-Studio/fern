@@ -31,4 +31,15 @@ class Filters {
   public static function apply(string $filter, $startingValue, ...$args) {
     return apply_filters($filter, $startingValue, ...$args);
   }
+
+  /**
+   * Remove an filter handler from the filter named. Alternative of remove_filter
+   *
+   * @param string|string[] $filterName The name of the filter to remove the callback from.
+   *
+   * @return void
+   */
+  public static function removeHandlers(string|array $filterName) {
+    remove_all_filters($filterName);
+  }
 }
