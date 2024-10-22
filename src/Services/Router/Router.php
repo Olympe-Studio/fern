@@ -57,7 +57,8 @@ class Router extends Singleton {
     $req = Request::getCurrent();
 
     Filters::add(['template_include', 'admin_'], static function () {
-      require_once __DIR__ . '/RouteResolver.php';
+      $router = Router::getInstance();
+      $router->resolve();
     }, 9999, 1);
 
     if ($req->isAction()) {
@@ -68,6 +69,11 @@ class Router extends Singleton {
     }
   }
 
+  /**
+   * Resolve the admin actions
+   *
+   * @return void
+   */
   public function resolveAdminActions(): void {
     if ($this->shouldStop()) {
       return;
@@ -263,7 +269,7 @@ class Router extends Singleton {
    * @return bool
    */
   private function isReservedOrMagicMethod(string $methodName): bool {
-    return in_array($methodName, self::RESERVED_ACTIONS, true) || strpos($methodName, '__') === 0;
+    return in_array($methodName, self::RESERVED_ACTIONS, true) || strpos($methodName, '_') === 0;
   }
 
   /**
