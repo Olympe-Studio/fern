@@ -40,6 +40,7 @@ class Views {
     }
 
     $result = $engine->render($template, $data);
+    $result = Filters::apply('fern:core:views:result', $result);
     Events::trigger('qm/stop', 'fern:render_view');
     return $result;
   }
