@@ -182,6 +182,9 @@ class Router extends Singleton {
    * @param string $controller
    *
    * @return void
+   *
+   * @throws ActionException
+   * @throws ActionNotFoundException
    */
   private function handleActionRequest(string $ctr): void {
     $action = $this->request->getAction();
@@ -206,7 +209,13 @@ class Router extends Singleton {
 
       $reflection = new ReflectionMethod($controller, $name);
       if (!$reflection->isPublic() || $reflection->isStatic()) {
-        throw new ActionNotFoundException("Action $name must be a public and non-static method.");
+        throw new ActionException("Action $name must be a public and non-static method.");
+      }
+
+      $canRun = Filters::apply('fern:core:action:can_run', true, $action, $controller);
+
+      if (!$canRun) {
+        throw new ActionNotFoundException("Action $name not found.");
       }
 
       $reply = $controller->{$name}($this->request, $action);
