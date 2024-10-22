@@ -21,7 +21,7 @@ use Throwable;
  * The Router class is responsible for resolving the request and calling the appropriate controller.
  */
 class Router extends Singleton {
-  private const RESERVED_ACTIONS = ['handle', 'init'];
+  private const RESERVED_ACTIONS = ['handle', 'init', 'configure'];
 
   private Request $request;
   private ControllerResolver $controllerResolver;
@@ -48,13 +48,31 @@ class Router extends Singleton {
    * @return void
    */
   public static function boot(): void {
-    Filters::add('template_include', static function() {
-      /**
-       * Boot the controller resolver.
-       */
-      ControllerResolver::boot();
+    /**
+     * Boot the controller resolver.
+     */
+    ControllerResolver::boot();
+    $req = Request::getCurrent();
+
+    Filters::add(['template_include', 'admin_'], static function() {
       require_once __DIR__ . '/RouteResolver.php';
     }, 9999, 1);
+
+    if ($req->isAction()) {
+      Filters::add('admin_init', static function() {
+        $router = Router::getInstance();
+        $router->resolveAdminActions();
+      }, 9999, 1);
+    }
+  }
+
+  public function resolveAdminActions(): void {
+    if ($this->shouldStop()) {
+      return;
+    }
+
+    $controller = $this->resolveController('admin');
+    $this->handleActionRequest($controller);
   }
 
   /**
@@ -94,6 +112,10 @@ class Router extends Singleton {
    * @return string|null
    */
   private function resolveController(?string $viewType = 'view'): ?string {
+    if ($viewType === 'admin') {
+      return $this->handleAdminController();
+    }
+
     $id = $this->request->getCurrentId();
 
     if ($id !== null) {
@@ -106,7 +128,7 @@ class Router extends Singleton {
     $type = $this->request->isTerm() ? $this->request->getTaxonomy() : $this->request->getPostType();
 
     // If we are on a Page unhandled, it's going to fail.
-    if ($type === null || $type === 'page') {
+    if ($type === null || $type === 'page' && $viewType !== 'admin') {
       return $this->controllerResolver->getDefaultController();
     }
 
@@ -115,7 +137,22 @@ class Router extends Singleton {
       return $typeController;
     }
 
-    return $this->controllerResolver->getDefaultController();
+    // Unhandled post type, return the default controller.
+    if ($viewType !== 'admin') {
+      return $this->controllerResolver->getDefaultController();
+    }
+
+    return null;
+  }
+
+  /**
+   * Handles the admin controller.
+   *
+   * @return string|null
+   */
+  private function handleAdminController(): ?string {
+    $page = $this->request->getUrlParam('page');
+    return $this->controllerResolver->resolve('admin', $page);
   }
 
   /**
