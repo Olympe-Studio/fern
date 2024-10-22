@@ -201,7 +201,7 @@ class Router extends Singleton {
       }
 
       if (!method_exists($controller, $name) || !$this->canRunAction($name, $controller)) {
-        throw new ActionNotFoundException("Action $name not found in controller " . get_class($controller));
+        throw new ActionNotFoundException("Action $name not found.");
       }
 
       $reflection = new ReflectionMethod($controller, $name);
