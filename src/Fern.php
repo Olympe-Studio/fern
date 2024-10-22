@@ -12,6 +12,7 @@ use Fern\Core\Services\Wordpress\Images;
 use Fern\Core\Services\Wordpress\Wordpress;
 use Fern\Core\Utils\Autoloader;
 use Fern\Core\Wordpress\Events;
+use Twig\Error\RuntimeError;
 
 class Fern extends Singleton {
   const VERSION = '0.1.0';
@@ -115,5 +116,11 @@ class Fern extends Singleton {
 
     Events::trigger('qm/stop', 'fern:boot');
     Events::trigger('fern:core:after_boot');
+
+    if (class_exists('\App\App')) {
+      \App\App::boot();
+    } else {
+      throw new RuntimeError('App class not found. You need to create an App.php class in the App namespace.');
+    }
   }
 }
