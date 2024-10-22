@@ -36,17 +36,28 @@ class Autoloader extends Singleton {
    */
   private static function getFilesRecursively(string $dir, ?callable $filter = null): array {
     $result = [];
+
+    if (!is_dir($dir) || !is_readable($dir)) {
+      return $result;
+    }
+
     $iterator = new RecursiveIteratorIterator(
       new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS),
       RecursiveIteratorIterator::SELF_FIRST
     );
 
     foreach ($iterator as $fileInfo) {
+      // Skip directories, only process files
+      if ($fileInfo->isDir()) {
+        continue;
+      }
+
       if ($filter === null || $filter($fileInfo)) {
         $result[] = $fileInfo->getPathname();
       }
     }
 
+    sort($result);
     return $result;
   }
 
