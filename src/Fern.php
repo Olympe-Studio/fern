@@ -117,10 +117,10 @@ class Fern extends Singleton {
     Events::trigger('qm/stop', 'fern:boot');
     Events::trigger('fern:core:after_boot');
 
-    if (class_exists('\App\App')) {
+    if (class_exists('\App\App') && method_exists('\App\App', 'boot')) {
       \App\App::boot();
     } else {
-      throw new RuntimeError('App class not found. You need to create an App.php class in the App namespace.');
+      throw new RuntimeError('App class not found. You need to create an App.php class in the App namespace with a boot static method.');
     }
   }
 }
