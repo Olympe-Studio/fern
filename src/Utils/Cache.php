@@ -143,6 +143,132 @@ class Cache extends Singleton {
     ];
   }
 
+
+  /**
+   * Memoizes a callback's result based on its dependencies.
+   * Similar to React's useMemo, it will only recompute the value if dependencies change.
+   *
+   * @param callable $callback         The callback function to memoize
+   * @param array    $dependencies     Array of values that determine if cache should be invalidated
+   * @param int      $expiration       Cache expiration time in seconds
+   * @param bool     $persist          Whether to persist the cache across requests
+   *
+   * @return mixed The memoized result
+   * @throws \InvalidArgumentException If dependencies are not serializable
+   * @throws \RuntimeException If callback execution fails
+   */
+  public static function useMemo(
+    callable $callback,
+    array $dependencies = [],
+    int $expiration = self::DEFAULT_EXPIRATION,
+    bool $persist = false
+  ): mixed {
+    $instance = self::getInstance();
+    return $instance->_useMemo($callback, $dependencies, $expiration, $persist);
+  }
+
+  /**
+   * Internal implementation of useMemo
+   *
+   * @param callable $callback         The callback function to memoize
+   * @param array    $dependencies     Array of values that determine if cache should be invalidated
+   * @param int      $expiration       Cache expiration time in seconds
+   * @param bool     $persist          Whether to persist the cache across requests
+   * @return mixed
+   */
+  protected function _useMemo(
+    callable $callback,
+    array $dependencies,
+    int $expiration,
+    bool $persist
+  ): mixed {
+    $key = $this->generateMemoKey($callback, $dependencies);
+    $cache = $this;
+
+    return function (...$args) use ($cache, $key, $callback, $persist, $expiration) {
+      $cached = $cache->_get($key);
+      if ($cached !== null) {
+        return $cached;
+      }
+
+      try {
+        $result = $callback(...$args);
+        $this->_set($key, $result, $persist, $expiration);
+        return $result;
+      } catch (\Throwable $e) {
+        throw new \RuntimeException(
+          "Failed to execute memoized callback: " . $e->getMessage(),
+          0,
+          $e
+        );
+      }
+    };
+  }
+
+  /**
+   * Generates a unique cache key for the callback and its dependencies
+   *
+   * @param callable $callback
+   * @param array $dependencies
+   * @return string
+   * @throws InvalidArgumentException
+   */
+  protected function generateMemoKey(callable $callback, array $dependencies): string {
+    try {
+      if ($callback instanceof \Closure) {
+        $reflection = new \ReflectionFunction($callback);
+        $fileName = $reflection->getFileName();
+        $startLine = $reflection->getStartLine();
+        $endLine = $reflection->getEndLine();
+
+        if ($fileName && $startLine && $endLine) {
+          $file = file($fileName);
+          $code = implode('', array_slice($file, $startLine - 1, $endLine - $startLine + 1));
+        } else {
+          $code = spl_object_hash($callback);
+        }
+
+        // Include file name and lines to differentiate identical functions in different files
+        $callbackKey = $fileName . ':' . $startLine . ':' . $code;
+      } elseif (is_array($callback)) {
+        // Handle array callbacks (e.g., [$object, 'method'])
+        if (is_object($callback[0])) {
+          $callbackKey = spl_object_hash($callback[0]) . '::' . $callback[1];
+        } else {
+          $callbackKey = $callback[0] . '::' . $callback[1];
+        }
+      } elseif (is_string($callback) && is_callable($callback)) {
+        // Handle string callbacks (e.g., 'functionName')
+        $callbackKey = $callback;
+      } else {
+        throw new \InvalidArgumentException('Unsupported callback type');
+      }
+
+      // Use xxh32 if available, fallback to crc32 for dependencies
+      try {
+        if (function_exists('hash')) {
+          $depsKey = hash('xxh32', serialize($dependencies));
+        } else {
+          $depsKey = (string)crc32(serialize($dependencies));
+        }
+      } catch (\Exception $e) {
+        throw new \InvalidArgumentException(
+          'Dependencies must be serializable: ' . $e->getMessage()
+        );
+      }
+
+      if (function_exists('hash')) {
+        return 'memo_' . hash('xxh32', $callbackKey . '_' . $depsKey);
+      }
+
+      return 'memo_' . (string)crc32($callbackKey . '_' . $depsKey);
+    } catch (\Exception $e) {
+      throw new \InvalidArgumentException(
+        'Failed to generate memo key: ' . $e->getMessage()
+      );
+    }
+  }
+
   /**
    * Flushes both in-memory and persistent caches.
    */
