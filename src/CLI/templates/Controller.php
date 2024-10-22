@@ -3,11 +3,10 @@
 namespace App\Controllers\Subdir;
 
 use Fern\Core\Factory\Singleton;
+use Fern\Core\Services\Actions\Attributes\RequireCapabilities;
 use Fern\Core\Services\Controller\Controller;
 use Fern\Core\Services\HTTP\Reply;
 use Fern\Core\Services\HTTP\Request;
-
-use Fern\Core\Services\Actions\RequireCapabilities;
 
 
 class NameController extends Singleton implements Controller {
