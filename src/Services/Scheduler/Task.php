@@ -21,7 +21,8 @@ class Task {
     private readonly callable $callback,
     private readonly array $args = [],
     private readonly int $startAt = -1
-  ) {}
+  ) {
+  }
 
   /**
    * Get a task by its name

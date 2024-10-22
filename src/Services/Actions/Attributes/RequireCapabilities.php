@@ -1,6 +1,6 @@
 <?php
 
-namespace Fern\Core\Services\Actions;
+namespace Fern\Core\Services\Actions\Attributes;
 
 use Attribute;
 

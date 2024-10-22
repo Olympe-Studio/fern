@@ -7,15 +7,15 @@ namespace Fern\Core\Services\Router;
 use Fern\Core\Config;
 use Fern\Core\Errors\ActionException;
 use Fern\Core\Errors\ActionNotFoundException;
+use Fern\Core\Errors\AttributeValidationException;
 use Fern\Core\Errors\RouterException;
 use Fern\Core\Factory\Singleton;
-use Fern\Core\Services\Actions\RequireCapabilities;
+use Fern\Core\Services\Controller\AttributesManager;
 use Fern\Core\Services\HTTP\Reply;
 use Fern\Core\Services\HTTP\Request;
 use Fern\Core\Services\Controller\ControllerResolver;
 use Fern\Core\Wordpress\Events;
 use Fern\Core\Wordpress\Filters;
-use ReflectionException;
 use ReflectionMethod;
 use Throwable;
 
@@ -27,12 +27,14 @@ class Router extends Singleton {
 
   private Request $request;
   private ControllerResolver $controllerResolver;
+  private AttributesManager $attributeManagerr;
   private array $config;
 
   public function __construct() {
     $this->request = Request::getInstance();
     $this->config = Config::get('core.routes');
     $this->controllerResolver = ControllerResolver::getInstance();
+    $this->attributeManagerr = AttributesManager::getInstance();
   }
 
   /**
@@ -62,6 +64,8 @@ class Router extends Singleton {
     }, 9999, 1);
 
     if ($req->isAction()) {
+      AttributesManager::boot();
+
       Filters::add('admin_init', static function () {
         $router = Router::getInstance();
         $router->resolveAdminActions();
@@ -243,23 +247,22 @@ class Router extends Singleton {
    */
   private function canRunAction(string $name, object $controller): bool {
     try {
-      $reflection = new ReflectionMethod($controller, $name);
-
-      $attributes = $reflection->getAttributes(RequireCapabilities::class);
-      foreach ($attributes as $attribute) {
-        $requiredCapabilities = $attribute->newInstance()->capabilities;
-
-        foreach ($requiredCapabilities as $capability) {
-          if (!current_user_can($capability)) {
-            return false;
-          }
-        }
-      }
-
-      return true;
-    } catch (ReflectionException $e) {
+      $validation = $this->attributeManagerr->validateMethod(
+        $controller,
+      $name,
+        $this->request
+      );
+    } catch (AttributeValidationException $e) {
+      // Hide the error from the user
+      error_log($e->getMessage());
       return false;
     }
+
+    if ($validation !== true) {
+      return false;
+    }
+
+    return true;
   }
 
   /**

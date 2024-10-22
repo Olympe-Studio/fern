@@ -11,7 +11,7 @@ use ReflectionMethod;
 class Utils {
 
   /**
-   * Reflec a callable.
+   * Reflect a callable.
    *
    * @param callable $callable  The callable to reflect
    *
