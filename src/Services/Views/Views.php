@@ -6,6 +6,7 @@ namespace Fern\Core\Services\Views;
 
 use Fern\Core\Config;
 use Fern\Core\Wordpress\Events;
+use Fern\Core\Wordpress\Filters;
 
 class Views {
   /**
@@ -25,6 +26,19 @@ class Views {
   public static function render(string $template, array $data = []): string {
     Events::trigger('qm/start', 'fern:render_view');
     $engine = self::getEngine();
+
+    /**
+     * Allow data injection for views like global data
+     *
+     * @param array $data
+     *
+     * @return array
+     */
+    $data = Filters::apply('fern:core:views:data', $data);
+    if (!is_array($data)) {
+      throw new \InvalidArgumentException('Invalid data. Views data must be an array, received: ' . gettype($data) . '.');
+    }
+
     $result = $engine->render($template, $data);
     Events::trigger('qm/stop', 'fern:render_view');
     return $result;
