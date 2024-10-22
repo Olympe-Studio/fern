@@ -32,6 +32,20 @@ class Events {
   }
 
   /**
+   * Trigger an event and return the output as a string.
+   *
+   * @param string $name   The name of the event to trigger.
+   * @param mixed[] $args  The arguments to pass to the event.
+   *
+   * @return string
+   */
+  public static function renderToString(string $name, ...$args): string {
+    ob_start();
+    self::trigger($name, ...$args);
+    return ob_get_clean();
+  }
+
+  /**
    * Remove an event handler from the event named. Alternative of remove_action
    *
    * @param string|string[] $eventName The name of the event to remove the callback from.
