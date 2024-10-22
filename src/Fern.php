@@ -76,8 +76,10 @@ class Fern extends Singleton {
    * @return void
    */
   private static function bootThemeSupport(): void {
-    Events::trigger('after_theme_support', static function() {
-      $themeSupport = Config::get('theme_support', []);
+    Events::addHandlers('after_setup_theme', static function() {
+      $theme = Config::get('theme', []);
+      $themeSupport = $theme['support'] ?? [];
+      $menus = $theme['menus'] ?? [];
 
       foreach ($themeSupport as $feature => $value) {
         if (is_bool($value) && $value) {
@@ -85,8 +87,14 @@ class Fern extends Singleton {
           continue;
         }
 
-        add_theme_support($feature, $value);
+        if (is_bool($value) && !$value) {
+          continue;
         }
+
+        add_theme_support($feature, $value);
+      }
+
+      register_nav_menus($menus);
     });
   }
 
