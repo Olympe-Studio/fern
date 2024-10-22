@@ -9,11 +9,13 @@ use Fern\Core\Errors\ActionException;
 use Fern\Core\Errors\ActionNotFoundException;
 use Fern\Core\Errors\RouterException;
 use Fern\Core\Factory\Singleton;
+use Fern\Core\Services\Actions\RequireCapabilities;
 use Fern\Core\Services\HTTP\Reply;
 use Fern\Core\Services\HTTP\Request;
 use Fern\Core\Services\Controller\ControllerResolver;
 use Fern\Core\Wordpress\Events;
 use Fern\Core\Wordpress\Filters;
+use ReflectionException;
 use ReflectionMethod;
 use Throwable;
 
@@ -54,12 +56,12 @@ class Router extends Singleton {
     ControllerResolver::boot();
     $req = Request::getCurrent();
 
-    Filters::add(['template_include', 'admin_'], static function() {
+    Filters::add(['template_include', 'admin_'], static function () {
       require_once __DIR__ . '/RouteResolver.php';
     }, 9999, 1);
 
     if ($req->isAction()) {
-      Filters::add('admin_init', static function() {
+      Filters::add('admin_init', static function () {
         $router = Router::getInstance();
         $router->resolveAdminActions();
       }, 9999, 1);
@@ -198,7 +200,7 @@ class Router extends Singleton {
         throw new ActionException("Action '$name' is reserved or a magic method and cannot be used as an action name.");
       }
 
-      if (!method_exists($controller, $name)) {
+      if (!method_exists($controller, $name) || !$this->canRunAction($name, $controller)) {
         throw new ActionNotFoundException("Action $name not found in controller " . get_class($controller));
       }
 
@@ -212,6 +214,36 @@ class Router extends Singleton {
     } catch (Throwable $e) {
       $reply = new Reply(500, $e->getMessage(), 'text/plain');
       $reply->send();
+    }
+  }
+
+  /**
+   * Validates if an action can be executed and handles validation errors
+   *
+   * @param string $name
+   * @param object $controller
+   * @param Reply|null $reply
+   *
+   * @return bool
+   */
+  private function canRunAction(string $name, object $controller): bool {
+    try {
+      $reflection = new ReflectionMethod($controller, $name);
+
+      $attributes = $reflection->getAttributes(RequireCapabilities::class);
+      foreach ($attributes as $attribute) {
+        $requiredCapabilities = $attribute->newInstance()->capabilities;
+
+        foreach ($requiredCapabilities as $capability) {
+          if (!current_user_can($capability)) {
+            return false;
+          }
+        }
+      }
+
+      return true;
+    } catch (ReflectionException $e) {
+      return false;
     }
   }
 
@@ -255,8 +287,7 @@ class Router extends Singleton {
       || $this->request->isAutoSave()
       || $this->request->isCRON()
       || $this->request->isREST()
-      || ($this->request->isAjax() && !$this->request->isAction())
-    ;
+      || ($this->request->isAjax() && !$this->request->isAction());
   }
 
   /**
@@ -280,7 +311,6 @@ class Router extends Singleton {
       || ((!isset($disabled['category_archive']) || $disabled['category_archive'] !== false) && $this->request->isCategory())
       || ((!isset($disabled['date_archive']) || $disabled['date_archive'] !== false) && $this->request->isDate())
       || ((!isset($disabled['feed']) || $disabled['feed'] !== false) && $this->request->isFeed())
-      || ((!isset($disabled['search']) || $disabled['search'] !== false) && $this->request->isSearch())
-    ;
+      || ((!isset($disabled['search']) || $disabled['search'] !== false) && $this->request->isSearch());
   }
 }
