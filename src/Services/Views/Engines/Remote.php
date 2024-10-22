@@ -29,7 +29,8 @@ class Remote implements RenderingEngine {
    * @param array $config
    * @return void
    */
-  public function boot(): void {}
+  public function boot(): void {
+  }
 
   /**
    * Render a block

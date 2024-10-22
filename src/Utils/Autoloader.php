@@ -97,14 +97,16 @@ PHP . PHP_EOL;
 
   /**
    * Get files starting with an underscore
+   *
    * In Fern, files starting with an underscore are considered procedural files
+   * and are autoloaded.
    *
    * @return array
    */
   private static function getUnderscoreFiles(): array {
     $root = Fern::getRoot();
     $appPath = trailingslashit($root) . 'App';
-    return self::getFilesRecursively($appPath, function($fileInfo) {
+    return self::getFilesRecursively($appPath, function ($fileInfo) {
       return $fileInfo->isFile() &&
         $fileInfo->getExtension() === 'php' &&
         strpos($fileInfo->getFilename(), '_') === 0;

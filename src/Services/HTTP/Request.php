@@ -9,54 +9,54 @@ use Fern\Core\Services\Actions\Action;
 
 class Request extends Singleton {
   /**
-  * @var int|null The ID of the current request (post, page, or term ID).
-  */
- private ?int $id;
+   * @var int|null The ID of the current request (post, page, or term ID).
+   */
+  private ?int $id;
 
- /**
-  * @var mixed The parsed body of the request.
-  */
- private $body;
+  /**
+   * @var mixed The parsed body of the request.
+   */
+  private $body;
 
- /**
-  * @var string The content type of the request.
-  */
- private string $contentType;
+  /**
+   * @var string The content type of the request.
+   */
+  private string $contentType;
 
- /**
-  * @var array The headers of the request.
-  */
- private $headers;
+  /**
+   * @var array The headers of the request.
+   */
+  private $headers;
 
- /**
-  * @var string The HTTP method of the request (GET, POST, etc.).
-  */
- private string $method;
+  /**
+   * @var string The HTTP method of the request (GET, POST, etc.).
+   */
+  private string $method;
 
- /**
-  * @var string The requested URI.
-  */
- private string $requestedUri;
+  /**
+   * @var string The requested URI.
+   */
+  private string $requestedUri;
 
- /**
-  * @var string The user agent string of the request.
-  */
- private string $userAgent;
+  /**
+   * @var string The user agent string of the request.
+   */
+  private string $userAgent;
 
- /**
-  * @var array The uploaded files in the request.
-  */
- private $files;
+  /**
+   * @var array The uploaded files in the request.
+   */
+  private $files;
 
- /**
-  * @var array The query parameters of the request.
-  */
- private $query;
+  /**
+   * @var array The query parameters of the request.
+   */
+  private $query;
 
- /**
-  * @var string The full URL of the request.
-  */
- private string $url;
+  /**
+   * @var string The full URL of the request.
+   */
+  private string $url;
 
   public function __construct() {
     $this->id = $this->getCurrentId();

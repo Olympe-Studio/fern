@@ -41,7 +41,7 @@ class Scheduler extends Singleton {
    * @return array
    * @throws SchedulerParsingError
    */
-  private static function parseScheduleString(string $str): array{
+  private static function parseScheduleString(string $str): array {
     if (!preg_match('/^every_(\d+)_(seconds|minutes|hours|days)$/', $str, $matches)) {
       throw new SchedulerParsingError('Invalid schedule string. Received: ' . $str . ' but expected pattern "every_{number}_{(seconds|minutes|hours|days)}" with a number greater than 1 and a valid unit.');
     }
@@ -61,7 +61,7 @@ class Scheduler extends Singleton {
       'days' => 86400
     ];
 
-    if ( ($interval > PHP_INT_MAX / $secondsMultipliers[$unit])) {
+    if (($interval > PHP_INT_MAX / $secondsMultipliers[$unit])) {
       throw new SchedulerParsingError('Interval is too large to be scheduled. Interval can\'t be greater than `PHP_INT_MAX` value when converted to timestamp');
     }
 

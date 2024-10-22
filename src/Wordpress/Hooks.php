@@ -1,5 +1,7 @@
 <?php
+
 declare(strict_types=1);
+
 namespace Fern\Core\Wordpress;
 
 use Fern\Core\Utils\Utils;
@@ -29,5 +31,4 @@ trait Hooks {
       call_user_func($function, $event, $callback, $priority, $acceptedArgs);
     }
   }
-
 }

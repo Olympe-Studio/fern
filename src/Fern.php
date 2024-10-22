@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Fern\Core;
@@ -76,7 +77,7 @@ class Fern extends Singleton {
    * @return void
    */
   private static function bootThemeSupport(): void {
-    Events::addHandlers('after_setup_theme', static function() {
+    Events::addHandlers('after_setup_theme', static function () {
       $theme = Config::get('theme', []);
       $themeSupport = $theme['support'] ?? [];
       $menus = $theme['menus'] ?? [];

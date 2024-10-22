@@ -7,6 +7,8 @@ use Fern\Core\Services\Controller\Controller;
 use Fern\Core\Services\HTTP\Reply;
 use Fern\Core\Services\HTTP\Request;
 
+use Fern\Core\Services\Actions\RequireCapabilities;
+
 
 class NameController extends Singleton implements Controller {
   public static string $handle = 'id_or_post_type_or_taxonomy';
@@ -33,5 +35,15 @@ class NameController extends Singleton implements Controller {
     $greeting = $action->get('greeting');
 
     return new Reply(200, "Hello, {$greeting}!");
+  }
+
+  /**
+   * An exemple of an action that is only available to users with the manage_options capability.
+   *
+   * @return Reply
+   */
+  #[RequireCapabilities(['manage_options'])]
+  public function optionsManagerOnlyAction(Request $request): Reply {
+    return new Reply(200, 'Hello, Options Manager!');
   }
 }

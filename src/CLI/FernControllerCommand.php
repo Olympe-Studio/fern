@@ -1,6 +1,7 @@
 <?php
 
 namespace Fern\Core\CLI;
+
 use Fern\Core\Fern;
 use WP_CLI;
 
@@ -51,7 +52,7 @@ class FernControllerCommand {
     $outputDir = trailingslashit(Fern::getRoot()) . 'App/Controllers/';
     if (!empty($subdir)) {
       $outputDir .= trailingslashit($subdir);
-  }
+    }
 
     // Ensure the output directory exists
     if (!is_dir($outputDir)) {

@@ -66,5 +66,3 @@ class Views {
     return $engine;
   }
 }
-
-

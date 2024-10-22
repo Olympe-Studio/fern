@@ -21,6 +21,11 @@ class Mailer extends Singleton {
     $this->config = Config::get('mailer');
   }
 
+  /**
+   * Get the mailer configuration
+   *
+   * @return array<string, mixed>
+   */
   public function getConfig(): array {
     return $this->config;
   }

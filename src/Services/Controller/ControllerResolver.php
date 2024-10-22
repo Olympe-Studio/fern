@@ -101,7 +101,7 @@ class ControllerResolver extends Singleton {
     $config['menu_slug'] = $handle;
 
     // Override the callback with the controller's handle
-    $callback = function() use ($controller) {
+    $callback = function () use ($controller) {
       $reply = $controller->handle(Request::getCurrent());
       echo $reply->send();
     };
