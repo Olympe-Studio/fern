@@ -16,7 +16,7 @@ trait Hooks {
    *
    * @return void
    */
-  public static function _add(string $function, string|array $eventName, callable $callback, int $priority = 10, int $acceptedArgs = -1): void {
+  public static function _add(string $function, string|array $eventName, $callback, int $priority = 10, int $acceptedArgs = -1): void {
     if (is_string($eventName)) {
       $eventName = [$eventName];
     }

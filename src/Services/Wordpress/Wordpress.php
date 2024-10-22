@@ -16,11 +16,13 @@ class Wordpress {
    * @return void
    */
   public static function boot(): void {
-    self::bootExcerpt();
-    self::bootUploadMimes();
-    self::bootDashboardWidgets();
-    self::bootAdminMenuRemovals();
-    self::bootAdminToolbarRemovals();
+    if (!wp_doing_ajax() && !wp_doing_cron()) {
+      self::bootExcerpt();
+      self::bootUploadMimes();
+      self::bootDashboardWidgets();
+      self::bootAdminMenuRemovals();
+      self::bootAdminToolbarRemovals();
+    }
   }
 
   /**
