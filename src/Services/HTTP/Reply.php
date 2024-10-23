@@ -35,6 +35,94 @@ class Reply {
   }
 
   /**
+   * Converts the Reply to a storable array format
+   *
+   * @return array
+   */
+  public function toArray(): array {
+    return [
+      'content_type' => $this->contentType,
+      'body' => $this->serializeBody($this->body),
+      'headers' => $this->headers,
+      'trailers' => $this->trailers,
+      'status' => $this->status,
+      'hijacked' => $this->hijacked,
+      '__class' => static::class,
+      '__timestamp' => time()
+    ];
+  }
+
+  /**
+   * Creates a Reply instance from stored data
+   *
+   * @param array $data
+   * @return static
+   */
+  public static function fromArray(array $data): static {
+    $reply = new static(
+      $data['status'] ?? 200,
+      self::unserializeBody($data['body'] ?? ''),
+      $data['content_type'] ?? 'text/html',
+      $data['headers'] ?? []
+    );
+
+    if (isset($data['trailers'])) {
+      foreach ($data['trailers'] as $name => $value) {
+        $reply->addTrailer($name, $value);
+      }
+    }
+
+    if (!empty($data['hijacked'])) {
+      $reply->hijack();
+    }
+
+    return $reply;
+  }
+
+  /**
+   * Implement JsonSerializable
+   */
+  public function jsonSerialize(): array {
+    return $this->toArray();
+  }
+
+  /**
+   * Handles body serialization based on content type
+   *
+   * @param mixed $body
+   * @return string|array
+   */
+  protected function serializeBody(mixed $body): string|array {
+    if ($this->contentType === 'application/json') {
+      return is_array($body) ? $body : [];
+    }
+
+    if (is_object($body) && method_exists($body, '__toString')) {
+      return (string)$body;
+    }
+
+    if (is_resource($body)) {
+      return stream_get_contents($body);
+    }
+
+    return (string)$body;
+  }
+
+  /**
+   * Handles body unserialization based on content type
+   *
+   * @param mixed $body
+   * @return mixed
+   */
+  protected static function unserializeBody(mixed $body): mixed {
+    if (is_array($body)) {
+      return $body;
+    }
+
+    return (string) $body;
+  }
+
+  /**
    * Redirect the request.
    *
    * @param string $to  The new location (URL) to redirect the request to.

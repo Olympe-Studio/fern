@@ -8,6 +8,8 @@ use Fern\Core\Errors\AttributeValidationException;
 use ReflectionMethod;
 use ReflectionAttribute;
 use Fern\Core\Factory\Singleton;
+use Fern\Core\Services\Actions\Attributes\CacheHandler;
+use Fern\Core\Services\Actions\Attributes\CacheReply;
 use Fern\Core\Services\Actions\Attributes\CapabilitiesHandler;
 use Fern\Core\Services\Actions\Attributes\RequireCapabilities;
 use Fern\Core\Services\HTTP\Request;
@@ -27,6 +29,7 @@ class AttributesManager extends Singleton {
     $manager = AttributesManager::getInstance();
     $handlers = Filters::apply('fern:core:controller:attribute_handlers', [
       RequireCapabilities::class => [new CapabilitiesHandler(), 'handle'],
+      CacheReply::class => [new CacheHandler(), 'handle'],
     ]);
 
     foreach ($handlers as $attributeClass => $handler) {
