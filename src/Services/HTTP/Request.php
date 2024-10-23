@@ -236,7 +236,7 @@ class Request extends Singleton {
     $input = file_get_contents('php://input');
 
     if (strpos($this->contentType, 'application/json') !== false) {
-      $this->body = json_decode($input, true) ?? $input;
+      $this->body = JSON::decode($input, true) ?? $input;
       return;
     }
 
