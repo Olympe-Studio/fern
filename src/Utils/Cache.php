@@ -22,8 +22,15 @@ class Cache extends Singleton {
   /** @var array Persistent cache storage */
   protected array $persistentCache;
 
+  /** @var bool Track if persistent cache has been modified */
+  protected bool $isDirty = false;
+
+  /** @var string The option name for storing persistent cache */
+  const PERSISTENT_CACHE_OPTION = 'fern:core:persistent_cache';
+
   /** @var int Default expiration time in seconds (4 hours) */
   const DEFAULT_EXPIRATION = 14400; // 4 * 60 * 60
+
 
   /**
    * Constructor for the Cache class.
@@ -41,10 +48,32 @@ class Cache extends Singleton {
    * Initializes the persistent cache from WordPress object cache.
    */
   protected function init(): void {
-    $persistent = wp_cache_get('persistent_cache', 'fern:core') ?: [];
+    $persistent = get_option(self::PERSISTENT_CACHE_OPTION, []);
+
     if (!empty($persistent)) {
       $this->persistentCache = $this->removeExpiredItems($persistent);
+
+      // If items were removed due to expiration, mark as dirty
+      if (count($persistent) !== count($this->persistentCache)) {
+        $this->isDirty = true;
+      }
     }
+  }
+
+  /**
+   * Returns true if the persistent cache has been modified.
+   *
+   * @return bool
+   */
+  public function isDirty(): bool {
+    return $this->isDirty;
+  }
+
+  /**
+   * Resets the dirty state of the persistent cache.
+   */
+  public function setDirtyState(bool $isDirty): void {
+    $this->isDirty = $isDirty;
   }
 
   /**
@@ -108,6 +137,8 @@ class Cache extends Singleton {
         'value' => $value,
         'expires' => time() + $expiration
       ];
+
+      $this->isDirty = true;
     }
   }
 
@@ -283,7 +314,8 @@ class Cache extends Singleton {
   public static function flush(): void {
     $cache = self::getInstance();
     $cache->_flush();
-    wp_cache_delete('persistent_cache', 'fern:core');
+    $cache->setDirtyState(true);
+    delete_option(self::PERSISTENT_CACHE_OPTION);
   }
 
   /**
@@ -291,7 +323,32 @@ class Cache extends Singleton {
    */
   public static function save(): void {
     $cache = self::getInstance();
-    $cleanPersistentCache = $cache->removeExpiredItems($cache->getCaches()['persistent']);
-    wp_cache_set('persistent_cache', $cleanPersistentCache, 'fern:core');
+    $isDirty = $cache->isDirty();
+
+    if (!$isDirty) {
+      return;
+    }
+
+    $persistentCache = $cache->getCaches()['persistent'];
+    // Maybe we flushed the cache?
+    if (empty($persistentCache)) {
+      delete_option(self::PERSISTENT_CACHE_OPTION);
+      return;
+    }
+
+    $cleanPersistentCache = $cache->removeExpiredItems($persistentCache);
+    if (count($cleanPersistentCache) !== count($persistentCache)) {
+      $isDirty = true;
+    }
+
+    if ($isDirty) {
+      update_option(self::PERSISTENT_CACHE_OPTION, $cleanPersistentCache, true);
+    }
+
+    if (empty($cleanPersistentCache)) {
+      delete_option(self::PERSISTENT_CACHE_OPTION);
+    }
+
+    $cache->setDirtyState(false);
   }
 }
