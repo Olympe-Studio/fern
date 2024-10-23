@@ -24,10 +24,10 @@ class CacheHandler implements AttributesHandler {
   /**
    * Handle the Cache attribute
    *
-   * @param ReflectionAttribute $attribute  The attribute instance
-   * @param object              $controller The controller instance
-   * @param string              $methodName The method name
-   * @param Request             $request    The current request
+   * @param ReflectionAttribute<CacheReply> $attribute  The attribute instance
+   * @param object                          $controller The controller instance
+   * @param string                          $methodName The method name
+   * @param Request                         $request    The current request
    *
    * @return bool|string Returns true if the attribute is valid, or an error message
    */
@@ -71,6 +71,11 @@ class CacheHandler implements AttributesHandler {
 
   /**
    * Generate a cache key
+   *
+   * @param string|null   $key        The cache key
+   * @param object        $controller The controller instance
+   * @param array<string> $varyBy     The vary by parameters
+   * @param Request       $request    The current request
    */
   private function generateCacheKey(?string $key, object $controller, array $varyBy, Request $request): string {
     $action = $request->getAction();

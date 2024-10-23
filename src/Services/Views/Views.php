@@ -17,6 +17,8 @@ class Views {
   /**
    * Render a template
    *
+   * @param string               $template The template to render
+   * @param array<string, mixed> $data     The data to pass to the template
    *
    * @throws InvalidArgumentException
    */
@@ -78,6 +80,7 @@ class Views {
     }
 
     $engine->boot();
+    self::$engine = $engine;
 
     return $engine;
   }

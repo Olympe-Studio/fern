@@ -11,6 +11,7 @@ class Action {
 
   private string|null $name;
 
+  /** @var array<string, mixed> */
   private array $args;
 
   public function __construct(Request $req) {
@@ -18,6 +19,9 @@ class Action {
     $this->init($req, $body);
   }
 
+  /**
+   * Gets the current action instance.
+   */
   public static function getCurrent(): Action {
     if (is_null(self::$current)) {
       self::$current = new Action(Request::getCurrent());
@@ -38,7 +42,7 @@ class Action {
   /**
    * Gets the raw arguments as an array of key-value pairs.
    *
-   * @return array The raw arguments.
+   * @return array<string, mixed> The raw arguments.
    */
   public function getRawArgs(): array {
     return $this->args;
@@ -99,7 +103,7 @@ class Action {
   /**
    * merge new arguments to the action arguments.
    *
-   * @param array $data The new arguments to merge.
+   * @param array<string, mixed> $data The new arguments to merge.
    *
    * @return Action The current action instance.
    */
@@ -158,8 +162,8 @@ class Action {
   /**
    * Initializes the action
    *
-   * @param Request $req  The request instance.
-   * @param array   $body The request body.
+   * @param Request              $req  The request instance.
+   * @param array<string, mixed> $body The request body.
    */
   private function init(Request $req, array $body): void {
     $this->name = $body['action'] ?? null;
@@ -169,11 +173,12 @@ class Action {
   /**
    * Parse the action arguments.
    *
-   * @param array $body The request body.
+   * @param Request              $req  The request instance.
+   * @param array<string, mixed> $body The request body.
    *
-   * @return array
+   * @return array<string, mixed>
    */
-  private function parseArgs($req, $body) {
+  private function parseArgs(Request $req, array $body): array {
     if (isset($body['args']) && $req->getContentType() !== 'form-data') {
       return $body['args'];
     }

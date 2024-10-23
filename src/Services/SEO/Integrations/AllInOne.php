@@ -17,7 +17,7 @@ class AllInOne implements SEOIntegration {
       $output = ob_get_clean();
       remove_action('wp_head', [$aioseoHead, 'wpHead'], 1);
 
-      return $output;
+      return $output ?: '';
     }
 
     return '';

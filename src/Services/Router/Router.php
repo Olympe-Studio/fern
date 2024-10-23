@@ -11,6 +11,7 @@ use Fern\Core\Errors\AttributeValidationException;
 use Fern\Core\Errors\RouterException;
 use Fern\Core\Factory\Singleton;
 use Fern\Core\Services\Controller\AttributesManager;
+use Fern\Core\Services\Controller\Controller;
 use Fern\Core\Services\Controller\ControllerResolver;
 use Fern\Core\Services\HTTP\Reply;
 use Fern\Core\Services\HTTP\Request;
@@ -20,27 +21,37 @@ use ReflectionMethod;
 use Throwable;
 
 /**
- * The Router class is responsible for resolving the request and calling the appropriate controller.
+ * @phpstan-type RouterConfig array{
+ *     disable?: array{
+ *         author_archive?: bool,
+ *         tag_archive?: bool,
+ *         category_archive?: bool,
+ *         date_archive?: bool,
+ *         feed?: bool,
+ *         search?: bool
+ *     }
+ * }
  */
 class Router extends Singleton {
   /**
-   * @var array
+   * @var array<string>
    */
   private const RESERVED_ACTIONS = ['handle', 'init', 'configure'];
+
   /**
-   * @var Request
    */
   private Request $request;
+
   /**
-   * @var ControllerResolver
    */
   private ControllerResolver $controllerResolver;
+
   /**
-   * @var AttributesManager
    */
   private AttributesManager $attributeManagerr;
+
   /**
-   * @var array
+   * @phpstan-var RouterConfig
    */
   private array $config;
 
@@ -53,6 +64,8 @@ class Router extends Singleton {
 
   /**
    * Get the config
+   *
+   * @return RouterConfig
    */
   public function getConfig(): array {
     return $this->config;
@@ -90,7 +103,7 @@ class Router extends Singleton {
     if ($this->shouldStop()) {
       return;
     }
-
+    /** @var class-string<Controller> $controller */
     $controller = $this->resolveController('admin');
     $this->handleActionRequest($controller);
   }
@@ -114,6 +127,7 @@ class Router extends Singleton {
       return;
     }
 
+    /** @var class-string<Controller>|null $controller */
     $controller = $this->resolveController();
 
     if ($controller !== null) {
@@ -132,6 +146,12 @@ class Router extends Singleton {
    */
   public function handle404(): void {
     $controller = $this->controllerResolver->get404Controller();
+
+    if (is_null($controller)) {
+      // Let WordPress handle the 404.
+      return;
+    }
+
     $reply = $controller::getInstance()->handle($this->request);
 
     if ($reply instanceof Reply) {
@@ -147,6 +167,10 @@ class Router extends Singleton {
 
   /**
    * Resolves the controller based on the request.
+   *
+   * @param string|null $viewType The view type to resolve.
+   *
+   * @return string|null The controller name or null if it doesn't exists.
    */
   private function resolveController(?string $viewType = 'view'): ?string {
     if ($viewType === 'admin') {
@@ -155,7 +179,7 @@ class Router extends Singleton {
 
     $id = $this->request->getCurrentId();
 
-    if ($id !== null) {
+    if ($id !== -1) {
       /**
        * In the context of multilingual sites, the ID might be an alternate language and we don't want to hardcode everyone of them.
        * This filter allows to change the ID to the appropriate one for the current language before resolving the controller.
@@ -174,7 +198,9 @@ class Router extends Singleton {
       }
 
       if (!is_null($id)) {
-        $idController = $this->controllerResolver->resolve($viewType, (string) $id);
+        $actualViewType = $viewType ?? 'view';
+        /** @var class-string<Controller>|null $idController */
+        $idController = $this->controllerResolver->resolve($actualViewType, (string) $id);
 
         if ($idController !== null) {
           return $idController;
@@ -186,10 +212,15 @@ class Router extends Singleton {
 
     // If we are on a Page unhandled, it's going to fail.
     if ($type === null || $type === 'page' && $viewType !== 'admin') {
-      return $this->controllerResolver->getDefaultController();
+      /** @var class-string<Controller> $defaultController */
+      $defaultController = $this->controllerResolver->getDefaultController();
+
+      return $defaultController;
     }
 
-    $typeController = $this->controllerResolver->resolve($viewType, $type);
+    $actualViewType = $viewType ?? 'view';
+    /** @var class-string<Controller>|null $typeController */
+    $typeController = $this->controllerResolver->resolve($actualViewType, $type);
 
     if ($typeController !== null) {
       return $typeController;
@@ -197,7 +228,10 @@ class Router extends Singleton {
 
     // Unhandled post type, return the default controller.
     if ($viewType !== 'admin') {
-      return $this->controllerResolver->getDefaultController();
+      /** @var class-string<Controller> $defaultController */
+      $defaultController = $this->controllerResolver->getDefaultController();
+
+      return $defaultController;
     }
 
     return null;
@@ -205,6 +239,8 @@ class Router extends Singleton {
 
   /**
    * Handles the admin controller.
+   *
+   * @return string|null The controller name or null if it doesn't exists.
    */
   private function handleAdminController(): ?string {
     $page = $this->request->getUrlParam('page');
@@ -215,7 +251,7 @@ class Router extends Singleton {
   /**
    * Handles an action request.
    *
-   * @param string $ctr The controller to handle the action
+   * @param class-string<Controller> $ctr The controller to handle the action
    *
    * @throws ActionException
    * @throws ActionNotFoundException
@@ -232,6 +268,11 @@ class Router extends Singleton {
 
     try {
       $name = $action->getName();
+
+      if ($name === '' || !$name) {
+        throw new ActionNotFoundException('Action name is required.');
+      }
+
       $controller = $ctr::getInstance();
 
       if ($this->isReservedOrMagicMethod($name)) {
@@ -265,17 +306,15 @@ class Router extends Singleton {
   /**
    * Validates if an action can be executed and handles validation errors
    *
-   * @param string $name The action name
+   * @param string $name       The action name
    * @param object $controller The controller instance
-   *
-   * @return bool
    */
   private function canRunAction(string $name, object $controller): bool {
     try {
       $validation = $this->attributeManagerr->validateMethod(
-        $controller,
-        $name,
-        $this->request,
+          $controller,
+          $name,
+          $this->request,
       );
     } catch (AttributeValidationException $e) {
       // Hide the error from the user
@@ -291,8 +330,6 @@ class Router extends Singleton {
    * Checks if a method name is reserved or a magic method.
    *
    * @param string $methodName The method name to check
-   *
-   * @return bool
    */
   private function isReservedOrMagicMethod(string $methodName): bool {
     return in_array($methodName, self::RESERVED_ACTIONS, true) || strpos($methodName, '_') === 0;
@@ -302,8 +339,6 @@ class Router extends Singleton {
    * Handles a GET request.
    *
    * @param string $controller The controller to handle the request
-   *
-   * @return void
    */
   private function handleGetRequest(string $controller): void {
     $reply = $controller::getInstance()->handle($this->request);
@@ -317,8 +352,6 @@ class Router extends Singleton {
 
   /**
    * Checks if the request should stop the router from resolving.
-   *
-   * @return bool
    */
   private function shouldStop(): bool {
     return $this->request->isCLI()
@@ -331,8 +364,6 @@ class Router extends Singleton {
 
   /**
    * Checks if the request should return a 404 error.
-   *
-   * @return bool
    */
   private function should404(): bool {
     if ($this->request->isAction()) {

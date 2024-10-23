@@ -85,11 +85,11 @@ class AttributesManager extends Singleton {
       if (!empty($errors)) {
         throw new AttributeValidationException(
             sprintf(
-              'Validation failed for method %s::%s - %s',
-              get_class($controller),
-              $methodName,
-              implode(', ', $errors),
-          ),
+                'Validation failed for method %s::%s - %s',
+                get_class($controller),
+                $methodName,
+                implode(', ', $errors),
+            ),
         );
       }
 
@@ -97,17 +97,24 @@ class AttributesManager extends Singleton {
     } catch (ReflectionException $e) {
       throw new AttributeValidationException(
           sprintf(
-            'Failed to validate method %s::%s - %s',
-            get_class($controller),
-            $methodName,
-            $e->getMessage(),
-        ),
+              'Failed to validate method %s::%s - %s',
+              get_class($controller),
+              $methodName,
+              $e->getMessage(),
+          ),
       );
     }
   }
 
   /**
    * Handle a single attribute
+   *
+   * @param ReflectionAttribute<object> $attribute  The attribute instance
+   * @param object                      $controller The controller instance
+   * @param string                      $methodName The method name
+   * @param Request                     $request    The current request
+   *
+   * @return bool|string Returns true if the attribute is valid, or an error message
    */
   private function handleAttribute(
       ReflectionAttribute $attribute,

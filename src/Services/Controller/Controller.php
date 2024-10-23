@@ -10,4 +10,9 @@ interface Controller {
    * Handle the request and return a reply.
    */
   public function handle(Request $request): Reply;
+
+  /**
+   * @return static
+   */
+  public static function getInstance(): self;
 }

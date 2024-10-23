@@ -19,6 +19,7 @@ class I18N {
   public static function boot(): void {
     $config = Config::get('i18n', []);
 
+    /** @phpstan-ignore-next-line */ // Better be cautious
     if (empty($config) || $config === null) {
       return;
     }
@@ -44,13 +45,17 @@ class I18N {
     $locale = determine_locale();
     $path = rtrim($path, '/\\');
 
+    if (empty($locale)) {
+      return;
+    }
+
     // Try loading exact locale match first - e.g. en_US
     if (self::tryLoadMoFile($path, $domain, $locale)) {
       return;
     }
 
     // Try base locale if exact match fails - e.g. en_US becomes en
-    $baseLocale = explode('_', $locale)[0] ?? '';
+    $baseLocale = explode('_', $locale)[0];
 
     if ($baseLocale && self::tryLoadMoFile($path, $domain, $baseLocale)) {
       return;

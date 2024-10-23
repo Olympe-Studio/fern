@@ -15,8 +15,6 @@ class NameController extends Singleton implements Controller {
    * Handle the request and return a reply.
    *
    * @param Request $request The request
-   *
-   * @return Reply
    */
   public function handle(Request $request): Reply {
     return new Reply(200, 'Hello, world!');
@@ -26,8 +24,6 @@ class NameController extends Singleton implements Controller {
    * An exemple of an action that say Hello World.
    *
    * @param Request $request The request
-   *
-   * @return Reply
    *
    * @see https://fern.dev/actions
    */
@@ -42,8 +38,6 @@ class NameController extends Singleton implements Controller {
    * An exemple of an action that is only available to users with the manage_options capability.
    *
    * @param Request $request The request
-   *
-   * @return Reply
    *
    * @see https://fern.dev/attributes/require-capabilities
    */

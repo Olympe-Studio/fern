@@ -2,6 +2,7 @@
 
 namespace Fern\Core\Services\Controller;
 
+/** @phpstan-ignore-next-line */
 trait AdminController {
   /**
    * Checks if the current controller is an admin controller

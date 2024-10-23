@@ -10,7 +10,7 @@ use Attribute;
 #[Attribute(Attribute::TARGET_METHOD)]
 class RequireCapabilities {
   /**
-   * @param array $capabilities Array of user capabilities required to access the action
+   * @param array<string> $capabilities Array of user capabilities required to access the action
    */
   public function __construct(public array $capabilities = []) {
   }

@@ -1,0 +1,18 @@
+parameters:
+  level: 8
+  paths:
+    - src/
+
+  ignoreErrors:
+    # WP-CLI specific ignores
+    - '#Call to static method .* on an unknown class WP_CLI#'
+    # Missing deps
+    - '#Call to static method is_module_active\(\) on an unknown class Fern\\Core\\Services\\SEO\\Jetpack#'
+    # False positives
+    - '#Parameter .* expects list<.*>, array<.*> given\.#'
+
+  dynamicConstantNames:
+    - WP_CLI
+
+  excludePaths:
+    - src/Services/Wordpress/Images.php

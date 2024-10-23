@@ -13,7 +13,7 @@ class TheSeoFramework implements SEOIntegration {
       ob_start();
       tsf()->print_seo_meta_tags();
 
-      return ob_get_clean();
+      return ob_get_clean() ?: '';
     }
 
     return '';

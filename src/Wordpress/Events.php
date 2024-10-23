@@ -24,33 +24,43 @@ class Events {
   /**
    * Trigger an event with the passed arguments.
    *
-   * @param mixed[] $args
+   * @param string $name    The name of the event to trigger.
+   * @param mixed  ...$args The arguments to pass to the event.
    */
-  public static function trigger(string $name, ...$args) {
+  public static function trigger(string $name, mixed ...$args): void {
     do_action($name, ...$args);
   }
 
   /**
    * Trigger an event and return the output as a string.
    *
-   * @param string  $name The name of the event to trigger.
-   * @param mixed[] $args The arguments to pass to the event.
+   * @param string       $name The name of the event to trigger.
+   * @param array<mixed> $args The arguments to pass to the event.
+   *
+   * @return string The output of the event.
    */
-  public static function renderToString(string $name, ...$args): string {
+  public static function renderToString(string $name, array $args = []): string {
     ob_start();
     self::trigger($name, ...$args);
+    $result = ob_get_clean();
 
-    return ob_get_clean();
+    return $result ? $result : '';
   }
 
   /**
    * Remove an event handler from the event named. Alternative of remove_action
    *
-   * @param string|string[] $eventName The name of the event to remove the callback from.
+   * @param string|array<string> $eventName The name of the event to remove the callback from.
    *
    * @return void
    */
   public static function removeHandlers(string|array $eventName) {
-    remove_all_actions($eventName);
+    if (is_string($eventName)) {
+      $eventName = [$eventName];
+    }
+
+    foreach ($eventName as $event) {
+      remove_all_actions($event);
+    }
   }
 }

@@ -20,11 +20,16 @@ final class JSON {
   private const DEFAULT_DEPTH = 512;
 
   /**
+   * Valid flags for json_validate function
+   */
+  private const VALID_VALIDATE_FLAGS = 0 | JSON_INVALID_UTF8_IGNORE;
+
+  /**
    * Validates a JSON string
    *
-   * @param string $json  JSON string to validate
-   * @param int    $depth Maximum nesting depth
-   * @param int    $flags Bitmask of JSON decode options
+   * @param string      $json  JSON string to validate
+   * @param int<1, max> $depth Maximum nesting depth*
+   * @param int         $flags Only 0 or JSON_INVALID_UTF8_IGNORE are valid
    *
    * @return bool True if the JSON string is valid
    */
@@ -33,8 +38,11 @@ final class JSON {
       int $depth = self::DEFAULT_DEPTH,
       int $flags = 0,
   ): bool {
+    $validatedFlags = $flags & self::VALID_VALIDATE_FLAGS;
+
     if (function_exists('json_validate')) {
-      return json_validate($json, $depth, $flags);
+      /** @phpstan-ignore-next-line */
+      return json_validate($json, $depth, $validatedFlags);
     }
 
     try {
@@ -52,14 +60,14 @@ final class JSON {
    * @param mixed    $data  The data to be encoded
    * @param int|null $flags JSON encoding options
    *
-   * @return string JSON encoded string
+   * @return string|false JSON encoded string or false if encoding fails
    *
    * @throws JsonException If encoding fails
    */
   public static function encode(
       mixed $data,
       ?int $flags = null,
-  ): string {
+  ): string|false {
     return json_encode(
         $data,
         $flags ?? self::DEFAULT_ENCODE_FLAGS,
@@ -69,14 +77,13 @@ final class JSON {
   /**
    * Decodes a JSON string into PHP data
    *
-   * @template T of array|object
    *
-   * @param string $json        JSON string to be decoded
-   * @param bool   $associative When true, objects will be converted to associative arrays
-   * @param int    $depth       Maximum nesting depth
-   * @param int    $flags       Bitmask of JSON decode options
+   * @param string      $json        JSON string to be decoded
+   * @param bool        $associative When true, objects will be converted to associative arrays
+   * @param int<1, max> $depth       Maximum nesting depth
+   * @param int         $flags       Bitmask of JSON decode options
    *
-   * @return T|null Returns the decoded value or null if invalid
+   * @return mixed|null Returns the decoded value or null if invalid
    *
    * @throws JsonException When JSON_THROW_ON_ERROR is used and decoding fails
    */
@@ -109,9 +116,9 @@ final class JSON {
   /**
    * Decodes a JSON string into an array
    *
-   * @param string $json  JSON string to be decoded
-   * @param int    $depth Maximum nesting depth
-   * @param int    $flags Bitmask of JSON decode options
+   * @param string      $json  JSON string to be decoded
+   * @param int<1, max> $depth Maximum nesting depth
+   * @param int         $flags Bitmask of JSON decode options
    *
    * @return array<mixed> Decoded array
    *
@@ -140,7 +147,7 @@ final class JSON {
    *
    * @throws JsonException If encoding fails
    */
-  public static function pretty(mixed $data): string {
+  public static function pretty(mixed $data): string|false {
     return self::encode(
         $data,
         self::DEFAULT_ENCODE_FLAGS | JSON_PRETTY_PRINT,

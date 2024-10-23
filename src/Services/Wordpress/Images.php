@@ -16,12 +16,28 @@ use InvalidArgumentException;
  * It can disable various image processing features or set up custom image sizes.
  *
  * @package Fern\Core\Services\Wordpress
+ *
+ * @phpstan-type ImageSize array{width: int, height: int, crop?: bool, label?: string}
+ * @phpstan-type ImageSettings array{
+ *     disable_image_sizes: bool,
+ *     disable_other_image_sizes: bool,
+ *     disable_image_editing: bool,
+ *     remove_default_image_sizes: bool,
+ *     disable_responsive_images: bool,
+ *     prevent_image_resizes_on_upload: bool,
+ *     jpeg_quality: int,
+ *     custom_sizes: array<string, ImageSize>
+ * }
+ * @phpstan-type ImagesConfig array{
+ *     disabled: bool,
+ *     settings: ImageSettings
+ * }
  */
 class Images {
   /** @var int The default JPEG quality */
   protected const DEFAULT_JPEG_QUALITY = 100;
 
-  /** @var array Default settings when not specified */
+  /** @phpstan-var ImageSettings Default settings when not specified */
   protected const DEFAULT_SETTINGS = [
     'disable_image_sizes' => false,
     'disable_other_image_sizes' => false,
@@ -33,13 +49,13 @@ class Images {
     'custom_sizes' => [],
   ];
 
-  /** @var array The configuration for image processing */
+  /** @phpstan-var ImagesConfig The configuration for image processing */
   protected array $config;
 
   /**
    * Images constructor.
    *
-   * @param array $config The configuration array for image processing
+   * @param ImagesConfig $config The configuration array for image processing
    */
   public function __construct(array $config) {
     $this->config = $this->normalizeConfig($config);
@@ -58,7 +74,7 @@ class Images {
   /**
    * Disable generation of intermediate image sizes
    *
-   * @return array An empty array to prevent generation of intermediate image sizes
+   * @return array<string> An empty array to prevent generation of intermediate image sizes
    */
   public function disableImageSizes(): array {
     return [];
@@ -77,7 +93,7 @@ class Images {
   /**
    * Disable image editing
    *
-   * @return array An empty array to disable image editing
+   * @return array<string> An empty array to disable image editing
    */
   public function disableImageEditing(): array {
     return [];
@@ -88,9 +104,9 @@ class Images {
    *
    * This method removes the 'thumbnail', 'medium', 'medium_large', and 'large' image sizes.
    *
-   * @param array $sizes The current image sizes
+   * @param array<string, mixed> $sizes The current image sizes
    *
-   * @return array The modified image sizes array
+   * @return array<string, mixed> The modified image sizes array
    */
   public function removeDefaultImageSizes(array $sizes): array {
     unset($sizes['thumbnail']);
@@ -124,9 +140,9 @@ class Images {
    *
    * This method empties the 'sizes' array in the attachment metadata to prevent resizes.
    *
-   * @param array $metadata The attachment metadata
+   * @param array<string, mixed> $metadata The attachment metadata
    *
-   * @return array The modified metadata
+   * @return array<string, mixed> The modified metadata
    */
   public function preventImageResizesOnUpload(array $metadata): array {
     $metadata['sizes'] = [];
@@ -158,9 +174,9 @@ class Images {
    *
    * This method adds the custom image sizes to the list of available sizes in the WordPress editor.
    *
-   * @param array $sizes The current list of image sizes
+   * @param array<string, mixed> $sizes The current list of image sizes
    *
-   * @return array The modified list of image sizes including custom sizes
+   * @return array<string, mixed> The modified list of image sizes including custom sizes
    */
   public function addCustomImageSizesToEditor(array $sizes): array {
     foreach ($this->config['settings']['custom_sizes'] as $name => $size) {
@@ -224,6 +240,10 @@ class Images {
 
   /**
    * Normalize the configuration by merging with defaults
+   *
+   * @param array<string, mixed> $config The configuration array
+   *
+   * @return ImagesConfig
    */
   protected function normalizeConfig(array $config): array {
     // If disabled is true, apply all disable settings

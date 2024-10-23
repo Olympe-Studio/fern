@@ -6,6 +6,7 @@ namespace Fern\Core\Utils;
 
 use Closure;
 use ReflectionFunction;
+use ReflectionFunctionAbstract;
 use ReflectionMethod;
 
 class Utils {
@@ -13,10 +14,8 @@ class Utils {
    * Reflect a callable.
    *
    * @param callable $callable The callable to reflect
-   *
-   * @return ReflectionFunctionAbstract
    */
-  public static function reflectCallable($callable) {
+  public static function reflectCallable($callable): ReflectionFunctionAbstract {
     if ($callable instanceof Closure) {
       return new ReflectionFunction($callable);
     }
@@ -40,10 +39,8 @@ class Utils {
    * Get the number of arguments expected by a callable.
    *
    * @param callable $callable The callable to inspect.
-   *
-   * @return int
    */
-  public static function getCallableExpectedArgumentsNumber($callable) {
+  public static function getCallableExpectedArgumentsNumber($callable): int {
     $reflec = self::reflectCallable($callable);
 
     return $reflec->getNumberOfParameters();

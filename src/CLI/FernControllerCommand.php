@@ -26,8 +26,11 @@ class FernControllerCommand {
    *     wp fern:controller create AdminDashboard --handle=dashboard
    *
    * @when after_wp_load
+   *
+   * @param array<int, string>    $args      Positional arguments (name, handle)
+   * @param array<string, string> $assocArgs Associative arguments (--subdir)
    */
-  public function create($args, $assocArgs) {
+  public function create(array $args, array $assocArgs): void {
     if (count($args) !== 2) {
       WP_CLI::error('This command requires exactly two arguments: <name> and <handle>.');
 
@@ -41,9 +44,16 @@ class FernControllerCommand {
 
     if (!file_exists($templatePath)) {
       WP_CLI::error("Template file not found at {$templatePath}");
+      exit;
     }
 
     $templateContent = file_get_contents($templatePath);
+
+    if (!$templateContent) {
+      WP_CLI::error('Failed to read template file.');
+      exit;
+    }
+
     $namespace = 'App\\Controllers' . (empty($subdir) ? '' : '\\' . $subdir);
     $templateContent = str_replace('namespace App\Controllers\Subdir;', "namespace {$namespace};", $templateContent);
     $controllerContent = str_replace('NameController', ucfirst($name) . 'Controller', $templateContent);

@@ -11,6 +11,7 @@ use RecursiveIteratorIterator;
  * Autoloader class
  */
 class Autoloader extends Singleton {
+  /** @var string The path to the includes.php file */
   public string $includesPath;
 
   public function __construct() {
@@ -54,6 +55,11 @@ class Autoloader extends Singleton {
 
   /**
    * Get files recursively
+   *
+   * @param string        $dir    The directory to search in
+   * @param callable|null $filter The filter to apply to the files
+   *
+   * @return array<string>
    */
   private static function getFilesRecursively(string $dir, ?callable $filter = null): array {
     $result = [];
@@ -86,7 +92,7 @@ class Autoloader extends Singleton {
   /**
    * Create includes.php file
    *
-   * @param array $files The files to include
+   * @param array<string> $files The files to include
    */
   private static function createIncludesFile(array $files): void {
     $content = <<<PHP
@@ -106,6 +112,8 @@ PHP . PHP_EOL;
 
   /**
    * Get the controllers
+   *
+   * @return array<string>
    */
   private static function getControllers(): array {
     $root = Fern::getRoot();
@@ -119,6 +127,8 @@ PHP . PHP_EOL;
    *
    * In Fern, files starting with an underscore are considered procedural files
    * and are autoloaded.
+   *
+   * @return array<string>
    */
   private static function getUnderscoreFiles(): array {
     $root = Fern::getRoot();

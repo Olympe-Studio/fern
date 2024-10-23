@@ -16,6 +16,9 @@ class Vanilla implements RenderingEngine {
    */
   private string $blocksPath;
 
+  /**
+   * @param array{path: string, blocks_path: string} $config
+   */
   public function __construct(array $config) {
     $this->path = trailingslashit($config['path']);
     $this->blocksPath = trailingslashit($config['blocks_path']);
@@ -34,6 +37,11 @@ class Vanilla implements RenderingEngine {
 
   /**
    * Render a block
+   *
+   * @param string               $block The block name
+   * @param array<string, mixed> $data  The data to pass to the block
+   *
+   * @throws InvalidArgumentException
    */
   public function renderBlock(string $block, array $data = []): string {
     $block = str_replace('.php', '', $block);
@@ -45,6 +53,8 @@ class Vanilla implements RenderingEngine {
   /**
    * Render a template
    *
+   * @param string               $template The template name
+   * @param array<string, mixed> $data     The data to pass to the template
    *
    * @throws InvalidArgumentException
    */
@@ -58,6 +68,8 @@ class Vanilla implements RenderingEngine {
   /**
    * Render a template
    *
+   * @param string               $path The path to the template
+   * @param array<string, mixed> $data The data to pass to the template
    *
    * @throws InvalidArgumentException
    */
@@ -71,6 +83,6 @@ class Vanilla implements RenderingEngine {
     extract($data, EXTR_SKIP);
     include $path;
 
-    return ob_get_clean();
+    return ob_get_clean() ?: '';
   }
 }

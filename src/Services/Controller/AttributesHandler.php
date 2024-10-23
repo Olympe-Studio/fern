@@ -11,10 +11,10 @@ interface AttributesHandler {
   /**
    * Handle the attribute
    *
-   * @param ReflectionAttribute $attribute  The attribute instance
-   * @param object              $controller The controller instance
-   * @param string              $methodName The method name
-   * @param Request             $request    The current request
+   * @param ReflectionAttribute<object> $attribute  The attribute instance
+   * @param object                      $controller The controller instance
+   * @param string                      $methodName The method name
+   * @param Request                     $request    The current request
    *
    * @return bool|string Returns true if the attribute is valid, or an error message
    */

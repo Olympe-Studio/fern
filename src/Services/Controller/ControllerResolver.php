@@ -8,6 +8,14 @@ use Fern\Core\Services\HTTP\Request;
 use Fern\Core\Wordpress\Events;
 use ReflectionClass;
 
+/**
+ * @phpstan-type ControllerRegistry array{
+ *   view: array<string, class-string<Controller>>,
+ *   admin: array<string, class-string<Controller>>,
+ *   default: ?class-string<Controller>,
+ *   _404: ?class-string<Controller>
+ * }
+ */
 class ControllerResolver extends Singleton {
   /** @var string Prefix for controller handles to avoid problems with numeric values */
   private const PREFIX = 'c_';
@@ -24,7 +32,7 @@ class ControllerResolver extends Singleton {
   /** @var string Constant for 404 type controller */
   private const TYPE_404 = '_404';
 
-  /** @var array Stores registered controllers */
+    /** @var ControllerRegistry */
   private array $controllers;
 
   public function __construct() {
@@ -54,7 +62,10 @@ class ControllerResolver extends Singleton {
    * Register all admin menus from controllers
    */
   public function registerAdminMenus(): void {
-    foreach ($this->controllers[self::TYPE_ADMIN] as $controller) {
+    /** @var array<string, class-string<Controller>> $adminControllers */
+    $adminControllers = $this->controllers[self::TYPE_ADMIN];
+
+    foreach ($adminControllers as $controller) {
       $this->registerAdminMenu($controller);
     }
   }
@@ -62,19 +73,24 @@ class ControllerResolver extends Singleton {
   /**
    * Processes a single class to determine if it's a valid controller and registers it if so.
    *
-   * @param string $className The name of the class to process
+   * @param class-string $className
    */
   public function processClass(string $className): void {
+    if (!class_exists($className)) {
+      return;
+    }
+
+    /** @var class-string<Controller> $className */
     $reflection = new ReflectionClass($className);
 
     if (!$reflection->implementsInterface(Controller::class)) {
       return;
     }
 
+    /** @var ReflectionClass<Controller> $reflection */
     $this->validateControllerClass($reflection);
-
-    $instance = $className::getInstance();
-    $type = $this->determineControllerType($reflection, $instance);
+    /** @var ReflectionClass<Controller> $reflection */
+    $type = $this->determineControllerType($reflection);
     $handle = (string) $reflection->getProperty('handle')->getValue();
 
     $this->register($type, $handle, $reflection->getName());
@@ -83,23 +99,32 @@ class ControllerResolver extends Singleton {
   /**
    * Register a controller.
    *
-   * @param string $type The type of the controller (view, admin, or default)
+   * @param string                   $type       The type of the controller (view, admin, or default)
+   * @param string                   $handle     The handle of the controller
+   * @param class-string<Controller> $controller
    */
   public function register(string $type, string $handle, string $controller): void {
     if ($type === self::TYPE_DEFAULT) {
+      /** @var class-string<Controller> $controller */
       $this->controllers[self::TYPE_DEFAULT] = $controller;
 
       return;
     }
 
     if ($type === self::TYPE_404) {
+      /** @var class-string<Controller> $controller */
       $this->controllers[self::TYPE_404] = $controller;
 
       return;
     }
 
-    $handle = self::PREFIX . $handle;
-    $this->controllers[$type][$handle] = $controller;
+    if ($type === self::TYPE_VIEW || $type === self::TYPE_ADMIN) {
+      $handle = self::PREFIX . $handle;
+      /** @var array<string, class-string<Controller>> $typeControllers */
+      $typeControllers = $this->controllers[$type];
+      $typeControllers[$handle] = $controller;
+      $this->controllers[$type] = $typeControllers;
+    }
   }
 
   /**
@@ -142,6 +167,8 @@ class ControllerResolver extends Singleton {
 
   /**
    * Register admin menu for a specific controller
+   *
+   * @param class-string $controllerClass
    */
   private function registerAdminMenu(string $controllerClass): void {
     $controller = $controllerClass::getInstance();
@@ -150,6 +177,7 @@ class ControllerResolver extends Singleton {
       return;
     }
 
+    /** @phpstan-ignore-next-line */
     $config = $controller->configure();
 
     // Validate required configuration
@@ -174,9 +202,10 @@ class ControllerResolver extends Singleton {
     $config['menu_slug'] = $handle;
 
     // Override the callback with the controller's handle
-    $callback = function () use ($controller) {
+    $callback = function () use ($controllerClass) {
+      $controller = $controllerClass::getInstance();
       $reply = $controller->handle(Request::getCurrent());
-      echo $reply->send();
+      $reply->send();
     };
 
     // Register the menu based on whether it's a submenu or top-level menu
@@ -230,8 +259,9 @@ class ControllerResolver extends Singleton {
   /**
    * Validates that a controller class has the required 'handle' property.
    *
+   * @param ReflectionClass<Controller> $reflection The reflection class instance
    *
-   * @throws ControllerRegistration if the class doesn't meet the requirements
+   * @throws ControllerRegistration<Controller> if the class doesn't meet the requirements
    */
   private function validateControllerClass(ReflectionClass $reflection): void {
     $className = $reflection->getName();
@@ -248,6 +278,7 @@ class ControllerResolver extends Singleton {
   /**
    * Determines the type of a controller based on its properties.
    *
+   * @param ReflectionClass<Controller> $reflection The reflection class instance
    *
    * @return string The determined controller type
    */

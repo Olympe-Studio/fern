@@ -70,21 +70,28 @@ class File {
     }
 
     $files = [];
+    $index = 0;
 
     foreach ($_FILES as $key => $data) {
       if (is_array($data['name'])) {
-        $files[$key] = self::handleMultipleFiles($key, $data);
+        // Flatten the array of files from handleMultipleFiles
+        $multipleFiles = self::handleMultipleFiles($key, $data);
+
+        foreach ($multipleFiles as $file) {
+          $files[$index++] = $file;
+        }
         continue;
       }
 
-      $name     = $data['name'];
-      $fullPath = $data['full_path'];
-      $type     = $data['type'];
-      $tmp_name = $data['tmp_name'];
-      $error    = $data['error'];
-      $size     = $data['size'];
-
-      $files[$key] = new self($key, $name, $fullPath, $type, $tmp_name, $error, $size);
+      $files[$index++] = new self(
+          $key,
+          $data['name'],
+          $data['full_path'],
+          $data['type'],
+          $data['tmp_name'],
+          $data['error'],
+          $data['size'],
+      );
     }
 
     return $files;
@@ -93,7 +100,7 @@ class File {
   /**
    * Retrieves the list of file extensions that are not allowed for upload.
    *
-   * @return array The list of disallowed file extensions.
+   * @return array<string> The list of disallowed file extensions.
    */
   public static function getNotAllowedFileExtensions() {
     /**
@@ -296,9 +303,9 @@ class File {
   /**
    * Validate the upload directory.
    *
-   * @param array $uploads The upload directory data.
+   * @param array<string, mixed> $uploads The upload directory data.
    *
-   * @return array The validated upload directory data.
+   * @return array<string, mixed> The validated upload directory data.
    *
    * @throws FileHandlingError
    */
@@ -329,20 +336,23 @@ class File {
   /**
    * Parses the File object to an array suitable for uploading.
    *
-   * @return array The File object as an associative array.
+   * @return array<string, mixed> The File object as an associative array.
    */
   public function toArray(): array {
     return [
-      'id' => $this->id,
+      'id'   => $this->id,
       'name' => $this->name,
       'type' => $this->type,
       'size' => $this->size,
-      'url' => $this->url,
+      'url'  => $this->url,
     ];
   }
 
   /**
    * Handle multiple file uploads for a single input
+   *
+   * @param string               $key  The input key
+   * @param array<string, mixed> $data The input data
    *
    * @return array<int, self>
    *

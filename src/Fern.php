@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Fern\Core;
 
 use Fern\Core\CLI\FernCLI;
+use Fern\Core\Errors\FernConfigurationExceptions;
 use Fern\Core\Factory\Singleton;
 use Fern\Core\Services\I18N\I18N;
 use Fern\Core\Services\Mailer\Mailer;
@@ -13,8 +14,10 @@ use Fern\Core\Services\Wordpress\Images;
 use Fern\Core\Services\Wordpress\Wordpress;
 use Fern\Core\Utils\Autoloader;
 use Fern\Core\Wordpress\Events;
-use Twig\Error\RuntimeError;
 
+/**
+ * @phpstan-type ConfigValue array<string, mixed>|mixed
+ */
 class Fern extends Singleton {
   const VERSION = '0.1.0';
 
@@ -49,7 +52,7 @@ class Fern extends Singleton {
   /**
    * Defines fern configuration and boot the application
    *
-   * @param array $config The configuration array
+   * @param array<string, ConfigValue> $config
    */
   public static function defineConfig(array $config): void {
     Events::trigger('fern:core:before_boot');
@@ -61,10 +64,11 @@ class Fern extends Singleton {
     Events::trigger('qm/stop', 'fern:boot');
     Events::trigger('fern:core:after_boot');
 
+    /** @phpstan-ignore-next-line */
     if (class_exists('\App\App') && method_exists('\App\App', 'boot')) {
       \App\App::boot();
     } else {
-      throw new RuntimeError('App class not found. You need to create an App.php class in the App namespace with a boot static method.');
+      throw new FernConfigurationExceptions('App class not found. You need to create an App.php class in the App namespace with a boot static method.');
     }
   }
 
@@ -99,12 +103,12 @@ class Fern extends Singleton {
       $menus = $theme['menus'] ?? [];
 
       foreach ($themeSupport as $feature => $value) {
-        if (is_bool($value) && $value) {
+        if ($value === true) {
           add_theme_support($feature);
           continue;
         }
 
-        if (is_bool($value) && !$value) {
+        if ($value === false) {
           continue;
         }
 

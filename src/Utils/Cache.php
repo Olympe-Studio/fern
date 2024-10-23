@@ -8,6 +8,7 @@ use Closure;
 use Exception;
 use Fern\Core\Factory\Singleton;
 use Fern\Core\Wordpress\Events;
+use InvalidArgumentException;
 use ReflectionFunction;
 use RuntimeException;
 use Throwable;
@@ -26,10 +27,10 @@ class Cache extends Singleton {
   /** @var int Default expiration time in seconds (4 hours) */
   const DEFAULT_EXPIRATION = 14400; // 4 * 60 * 60
 
-  /** @var array In-memory cache storage */
+  /** @var array<string, mixed> In-memory cache storage */
   protected array $cache;
 
-  /** @var array Persistent cache storage */
+  /** @var array<string, array{value: mixed, expires: int}> Persistent cache storage */
   protected array $persistentCache;
 
   /** @var bool Track if persistent cache has been modified */
@@ -135,7 +136,7 @@ class Cache extends Singleton {
   /**
    * Returns both in-memory and persistent caches.
    *
-   * @return array An array containing both cache arrays.
+   * @return array{inmemory: array<string, mixed>, persistent: array<string, array{value: mixed, expires:int}>}
    */
   public function getCaches(): array {
     return [
@@ -148,15 +149,15 @@ class Cache extends Singleton {
    * Memoizes a callback's result based on its dependencies.
    * Similar to React's useMemo, it will only recompute the value if dependencies change.
    *
-   * @param callable $callback     The callback function to memoize
-   * @param array    $dependencies Array of values that determine if cache should be invalidated
-   * @param int      $expiration   Cache expiration time in seconds
-   * @param bool     $persist      Whether to persist the cache across requests
+   * @param callable     $callback     The callback function to memoize
+   * @param array<mixed> $dependencies Array of values that determine if cache should be invalidated
+   * @param int          $expiration   Cache expiration time in seconds
+   * @param bool         $persist      Whether to persist the cache across requests
    *
    * @return mixed The memoized result
    *
-   * @throws \InvalidArgumentException If dependencies are not serializable
-   * @throws RuntimeException          If callback execution fails
+   * @throws InvalidArgumentException If dependencies are not serializable
+   * @throws RuntimeException         If callback execution fails
    */
   public static function useMemo(
       callable $callback,
@@ -209,8 +210,8 @@ class Cache extends Singleton {
 
     $cleanPersistentCache = $cache->removeExpiredItems($persistentCache);
 
-    if (count($cleanPersistentCache) !== count($persistentCache)) {
-      $isDirty = true;
+    if (count($cleanPersistentCache) === count($persistentCache)) {
+      $isDirty = false;
     }
 
     if ($isDirty) {
@@ -243,7 +244,7 @@ class Cache extends Singleton {
   /**
    * Checks if a cache item is expired.
    *
-   * @param array $item The cache item to check.
+   * @param array<string, mixed> $item The cache item to check.
    *
    * @return bool True if expired, false otherwise.
    */
@@ -254,9 +255,9 @@ class Cache extends Singleton {
   /**
    * Removes expired items from the given cache array.
    *
-   * @param array $cache The cache array to clean.
+   * @param array<string, array{value: mixed, expires: int}> $cache The cache array to clean.
    *
-   * @return array The cleaned cache array.
+   * @return array<string, array{value: mixed, expires: int}> The cleaned cache array.
    */
   protected function removeExpiredItems(array $cache): array {
     return array_filter($cache, fn($item) => !$this->isExpired($item));
@@ -265,10 +266,10 @@ class Cache extends Singleton {
   /**
    * Internal implementation of useMemo
    *
-   * @param callable $callback     The callback function to memoize
-   * @param array    $dependencies Array of values that determine if cache should be invalidated
-   * @param int      $expiration   Cache expiration time in seconds
-   * @param bool     $persist      Whether to persist the cache across requests
+   * @param callable     $callback     The callback function to memoize
+   * @param array<mixed> $dependencies Array of values that determine if cache should be invalidated
+   * @param int          $expiration   Cache expiration time in seconds
+   * @param bool         $persist      Whether to persist the cache across requests
    */
   protected function _useMemo(
       callable $callback,
@@ -304,6 +305,11 @@ class Cache extends Singleton {
   /**
    * Generates a unique cache key for the callback and its dependencies
    *
+   * @param callable     $callback     The callback function to memoize
+   * @param array<mixed> $dependencies Array of values that determine if cache should be invalidated
+   *
+   * @return string The generated cache key
+   *
    * @throws InvalidArgumentException
    */
   protected function generateMemoKey(callable $callback, array $dependencies): string {
@@ -316,6 +322,11 @@ class Cache extends Singleton {
 
         if ($fileName && $startLine && $endLine) {
           $file = file($fileName);
+
+          if (!is_array($file)) {
+            throw new InvalidArgumentException('Failed to read file');
+          }
+
           $code = implode('', array_slice($file, $startLine - 1, $endLine - $startLine + 1));
         } else {
           $code = spl_object_hash($callback);
@@ -330,11 +341,12 @@ class Cache extends Singleton {
         } else {
           $callbackKey = $callback[0] . '::' . $callback[1];
         }
+        /** @phpstan-ignore-next-line */
       } elseif (is_string($callback) && is_callable($callback)) {
         // Handle string callbacks (e.g., 'functionName')
         $callbackKey = $callback;
       } else {
-        throw new \InvalidArgumentException('Unsupported callback type');
+        throw new InvalidArgumentException('Unsupported callback type');
       }
 
       // Use xxh32 if available, fallback to crc32 for dependencies
@@ -345,7 +357,7 @@ class Cache extends Singleton {
           $depsKey = (string)crc32(serialize($dependencies));
         }
       } catch (Exception $e) {
-        throw new \InvalidArgumentException(
+        throw new InvalidArgumentException(
             'Dependencies must be serializable: ' . $e->getMessage(),
         );
       }
@@ -356,7 +368,7 @@ class Cache extends Singleton {
 
       return 'memo_' . (string)crc32($callbackKey . '_' . $depsKey);
     } catch (Exception $e) {
-      throw new \InvalidArgumentException(
+      throw new InvalidArgumentException(
           'Failed to generate memo key: ' . $e->getMessage(),
       );
     }

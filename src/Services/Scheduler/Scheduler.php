@@ -27,6 +27,8 @@ class Scheduler extends Singleton {
 
   /**
    * Get all the schedules.
+   *
+   * @return array<int|string, array{interval: int, display: string}>
    */
   public static function getSchedules(): array {
     return wp_get_schedules();
@@ -34,6 +36,8 @@ class Scheduler extends Singleton {
 
   /**
    * Create a schedule from a string that match pattern "every_{number}_{(seconds|minutes|hours|days)}"
+   *
+   * @param string $str The schedule string
    *
    * @throws SchedulerParsingError
    */
@@ -58,11 +62,11 @@ class Scheduler extends Singleton {
   /**
    * Schedule a hook.
    *
-   * @param string   $taskName The name of the task to schedule
-   * @param string   $interval The interval to schedule the task
-   * @param callable $callback The callback to schedule
-   * @param array    $args     The arguments to pass to the callback
-   * @param int      $startAt  Unix timestamp when to start the task, -1 for now
+   * @param string       $taskName The name of the task to schedule
+   * @param string       $interval The interval to schedule the task
+   * @param callable     $callback The callback to schedule
+   * @param array<mixed> $args     The arguments to pass to the callback
+   * @param int          $startAt  Unix timestamp when to start the task, -1 for now
    *
    * @throws SchedulerParsingError    If the interval string is invalid
    * @throws InvalidArgumentException If the callback is not callable
@@ -91,6 +95,8 @@ class Scheduler extends Singleton {
 
   /**
    * Get a task by its name
+   *
+   * @param string $taskName The name of the task
    *
    * @return Task|null The task if found, null otherwise
    */
@@ -135,6 +141,8 @@ class Scheduler extends Singleton {
    * Parse a schedule string into an interval and display text.
    *
    * @param string $str Match pattern "every_{number}_{(seconds|minutes|hours|days)}"
+   *
+   * @return array{interval: int, display: string}
    *
    * @throws SchedulerParsingError
    */

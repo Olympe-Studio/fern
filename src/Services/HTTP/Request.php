@@ -8,14 +8,31 @@ use Fern\Core\Factory\Singleton;
 use Fern\Core\Services\Actions\Action;
 use Fern\Core\Utils\JSON;
 
+/**
+ * @phpstan-type HttpMethod 'GET'|'POST'|'PUT'|'DELETE'|'PATCH'|'HEAD'|'OPTIONS'
+ * @phpstan-type HttpHeader string
+ * @phpstan-type HttpHeaders array<string, HttpHeader>
+ * @phpstan-type QueryParams array<string, string|array<string>>
+ * @phpstan-type UploadedFile array{
+ *   name: string,
+ *   type: string,
+ *   tmp_name: string,
+ *   error: int,
+ *   size: int
+ * }
+ * @phpstan-type UploadedFiles array<string, UploadedFile|array<UploadedFile>>
+ * @phpstan-type Cookie string
+ * @phpstan-type Cookies array<string, Cookie>
+ * @phpstan-type RequestBody array<string, mixed>|string
+ */
 class Request extends Singleton {
   /**
-   * @var int|null The ID of the current request (post, page, or term ID).
+   * @var int The ID of the current request (post, page, or term ID).
    */
-  private ?int $id;
+  private int $id;
 
   /**
-   * @var mixed The parsed body of the request.
+   * @var RequestBody The parsed body of the request.
    */
   private mixed $body;
 
@@ -25,12 +42,12 @@ class Request extends Singleton {
   private string $contentType;
 
   /**
-   * @var array The headers of the request.
+   * @var HttpHeaders The headers of the request.
    */
   private array $headers;
 
   /**
-   * @var string The HTTP method of the request (GET, POST, etc.).
+   * @var HttpMethod The HTTP method of the request (GET, POST, etc.).
    */
   private string $method;
 
@@ -45,12 +62,12 @@ class Request extends Singleton {
   private string $userAgent;
 
   /**
-   * @var array|null The uploaded files in the request.
+   * @var UploadedFiles|null The uploaded files in the request.
    */
   private ?array $files;
 
   /**
-   * @var array The query parameters of the request.
+   * @var QueryParams The query parameters of the request.
    */
   private array $query;
 
@@ -60,7 +77,7 @@ class Request extends Singleton {
   private string $url;
 
   /**
-   * @var array The cookies of the request.
+   * @var Cookies The cookies of the request.
    */
   private array $cookies;
 
@@ -74,7 +91,7 @@ class Request extends Singleton {
     $this->method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
     $this->requestedUri = $_SERVER['REQUEST_URI'] ?? '';
     $this->userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
-    $this->cookies = $_COOKIE ?? [];
+    $this->cookies = $_COOKIE;
     $this->url = untrailingslashit(get_home_url()) . $this->requestedUri;
     $this->query = $this->parseUrlParams();
 
@@ -90,6 +107,8 @@ class Request extends Singleton {
 
   /**
    * Gets the uploaded files.
+   *
+   * @return UploadedFiles|null
    */
   public function getFiles(): ?array {
     return $this->files;
@@ -102,7 +121,7 @@ class Request extends Singleton {
     $queriedObject = get_queried_object();
     $id = get_the_ID();
 
-    if (!is_null($queriedObject) && is_object($queriedObject)) {
+    if (!is_null($queriedObject)) {
       $id = $queriedObject->ID ?? false;
     }
 
@@ -130,8 +149,6 @@ class Request extends Singleton {
 
   /**
    * Checks if the current request is a REST request,
-   *
-   * @return bool;
    */
   public function isREST(): bool {
     return defined('REST_REQUEST') && REST_REQUEST;
@@ -139,8 +156,6 @@ class Request extends Singleton {
 
   /**
    * Checks if the current request is a CLI request,
-   *
-   * @return bool;
    */
   public function isCLI(): bool {
     return defined('WP_CLI') && constant('WP_CLI');
@@ -148,8 +163,6 @@ class Request extends Singleton {
 
   /**
    * Checks if the current request is a auto save request,
-   *
-   * @return bool;
    */
   public function isAutoSave(): bool {
     return defined('DOING_AUTOSAVE') && DOING_AUTOSAVE;
@@ -157,8 +170,6 @@ class Request extends Singleton {
 
   /**
    * Checks if the current request is a CRON request, (Wordpress CRON only)
-   *
-   * @return bool;
    */
   public function isCRON(): bool {
     return wp_doing_cron();
@@ -166,8 +177,6 @@ class Request extends Singleton {
 
   /**
    * Checks if the current request is a XMLRPC request
-   *
-   * @return bool;
    */
   public function isXMLRPC(): bool {
     return defined('XMLRPC_REQUEST') && XMLRPC_REQUEST;
@@ -325,8 +334,6 @@ class Request extends Singleton {
 
   /**
    * Gets the request content Type.
-   *
-   * @return string.
    */
   public function getContentType(): string {
     return $this->contentType;
@@ -334,8 +341,6 @@ class Request extends Singleton {
 
   /**
    * Gets the request requested Uri
-   *
-   * @return string.
    */
   public function getUri(): string {
     return $this->requestedUri;
@@ -389,7 +394,7 @@ class Request extends Singleton {
   /**
    * Gets the request headers.
    *
-   * @return array An array with all headers.
+   * @return HttpHeaders An array with all headers.
    */
   public function getHeaders(): array {
     return $this->headers;
@@ -431,7 +436,7 @@ class Request extends Singleton {
   /**
    * Gets the URL parameters as an array.
    *
-   * @return array|null The array of parameters in the URL or null.
+   * @return QueryParams The array of parameters in the URL or null.
    */
   public function getUrlParams(): ?array {
     return $this->query;
@@ -460,7 +465,7 @@ class Request extends Singleton {
   /**
    * Gets the Query String (the URL parameters)
    *
-   * @return array|null An array of parsed querystring or null.
+   * @return QueryParams An array of parsed querystring or null.
    */
   public function getQueryString(): ?array {
     return $this->query;
@@ -469,7 +474,7 @@ class Request extends Singleton {
   /**
    * Gets every cookies of the incomming request.
    *
-   * @return array An array of cookies.
+   * @return Cookies An array of cookies.
    */
   public function getCookies(): array {
     return $this->cookies;
@@ -537,11 +542,11 @@ class Request extends Singleton {
    */
   public function getPostType(): ?string {
     if (is_singular()) {
-      return get_post_type();
+      return get_post_type() ?: null;
     }
 
     if (is_post_type_archive()) {
-      return get_query_var('post_type');
+      return get_query_var('post_type') ?: null;
     }
 
     return null;
@@ -549,6 +554,8 @@ class Request extends Singleton {
 
   /**
    * Convert the request to an array
+   *
+   * @return array<string, mixed>
    */
   public function toArray(): array {
     return [
@@ -679,19 +686,15 @@ class Request extends Singleton {
 
   /**
    * Determine if the current request is an admin request.
-   *
-   * @return bool
    */
-  public function isAdmin() {
+  public function isAdmin(): bool {
     return is_admin();
   }
 
   /**
    * Determine if the current request is a search request.
-   *
-   * @return bool
    */
-  public function isSearch() {
+  public function isSearch(): bool {
     return is_search();
   }
 
@@ -709,8 +712,10 @@ class Request extends Singleton {
 
   /**
    * Sets the files
+   *
+   * @param UploadedFiles $files The files array.
    */
-  private function setFiles($files): void {
+  private function setFiles(array $files): void {
     $this->files = $files;
   }
 
@@ -734,13 +739,18 @@ class Request extends Singleton {
 
     $input = file_get_contents('php://input');
 
+    if (!$input) {
+      return;
+    }
+
     if (strpos($this->contentType, 'application/json') !== false) {
-      $this->body = JSON::decode($input, true) ?? $input;
+      $this->body = JSON::decode($input, true) ?: $input;
 
       return;
     }
 
     if (strpos($this->contentType, 'application/x-www-form-urlencoded') !== false) {
+      /** @phpstan-ignore-next-line */
       parse_str($input, $this->body);
 
       return;
@@ -752,48 +762,21 @@ class Request extends Singleton {
   /**
    * Sets the request Url Parameters
    *
-   * @return array|null An array of parsed URL parameters or null.
+   * @return QueryParams The array of parsed URL parameters.
    */
-  private function parseUrlParams(): ?array {
+  private function parseUrlParams(): array {
     return $_GET;
-  }
-
-  /**
-   * Sets the request content type to `html`, `xml`, `json` or `form-data`
-   *
-   * @param string $type `html`, `xml`, `json` or `form-data`. Any other type will be ignored.
-   *
-   * @return Request The current request instance.
-   */
-  private function setContentType(string $type): Request {
-    $this->contentType = $type;
-
-    return $this;
   }
 
   /**
    * Sets the request body.
    *
-   * @param string|array $body The **parsed** body value.
+   * @param RequestBody $body The **parsed** body value.
    *
    * @return Request The current request instance.
    */
   private function setBody($body): Request {
     $this->body = $body;
-
-    return $this;
-  }
-
-  /**
-   * Sets a header value.
-   *
-   * @param string $name  The header name.
-   * @param mixed  $value The header value.
-   *
-   * @return Request The current request Instance.
-   */
-  private function setHeader($name, $value): Request {
-    $this->headers[$name] = $value;
 
     return $this;
   }

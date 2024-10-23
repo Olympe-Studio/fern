@@ -9,16 +9,16 @@ use Fern\Core\Services\Scheduler\Scheduler;
  */
 class Task {
   /**
-   * @param string   $name     The unique name of the task
-   * @param string   $interval The interval pattern (e.g. "every_5_minutes")
-   * @param callable $callback The callback function to execute
-   * @param array    $args     Arguments to pass to the callback
-   * @param int      $startAt  Unix timestamp when the task starts, -1 for immediate
+   * @param string       $name     The unique name of the task
+   * @param string       $interval The interval pattern (e.g. "every_5_minutes")
+   * @param mixed        $callback The callback function to execute
+   * @param array<mixed> $args     Arguments to pass to the callback
+   * @param int          $startAt  Unix timestamp when the task starts, -1 for immediate
    */
   public function __construct(
       private readonly string $name,
       private readonly string $interval,
-      private readonly callable $callback,
+      private readonly mixed $callback,
       private readonly array $args = [],
       private readonly int $startAt = -1,
   ) {
@@ -50,12 +50,14 @@ class Task {
   /**
    * Get the callback of the task
    */
-  public function getCallback(): callable {
+  public function getCallback(): mixed {
     return $this->callback;
   }
 
   /**
    * Get the arguments of the task
+   *
+   * @return array<mixed>
    */
   public function getArgs(): array {
     return $this->args;

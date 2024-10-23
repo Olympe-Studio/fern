@@ -35,13 +35,19 @@ class Filters {
   }
 
   /**
-   * Remove an filter handler from the filter named. Alternative of remove_filter
+   * Remove a filter handler from the filter named. Alternative of remove_filter
    *
    * @param string|string[] $filterName The name of the filter to remove the callback from.
    *
    * @return void
    */
   public static function removeHandlers(string|array $filterName) {
-    remove_all_filters($filterName);
+    if (is_string($filterName)) {
+      $filterName = [$filterName];
+    }
+
+    foreach ($filterName as $filter) {
+      remove_all_filters($filter);
+    }
   }
 }

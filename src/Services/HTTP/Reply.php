@@ -13,23 +13,35 @@ use Fern\Core\Wordpress\Filters;
 use RuntimeException;
 
 class Reply {
+  /**  */
   private string $contentType;
 
-  private $body;
+  /**  */
+  private mixed $body;
 
-  private $headers;
+  /** @var array<string, mixed> */
+  private array $headers;
 
-  private $trailers;
+  /** @var array<string, mixed> */
+  private array $trailers;
 
+  /**  */
   private int $status;
 
+  /**  */
   private bool $hijacked;
 
-  public function __construct($status = 200, $body = '', $contentType = null, $headers = []) {
+  /**
+   * @param int                  $status      The HTTP status code (default 200)
+   * @param mixed                $body        The body content
+   * @param string|null          $contentType The content type (default `text/html`)
+   * @param array<string, mixed> $headers     The headers
+   */
+  public function __construct(int $status = 200, mixed $body = '', ?string $contentType = null, array $headers = []) {
     $this->contentType = $contentType ?? 'text/html';
 
     if (is_array($body) && $contentType === null) {
-      $this->contentType = $contentType ?? 'application/json';
+      $this->contentType = 'application/json';
     } elseif ($contentType === null && is_string($body)) {
       $this->contentType = 'text/html';
     }
@@ -43,6 +55,8 @@ class Reply {
 
   /**
    * Converts the Reply to a storable array format
+   *
+   * @return array<string, mixed>
    */
   public function toArray(): array {
     return [
@@ -59,13 +73,17 @@ class Reply {
 
   /**
    * Creates a Reply instance from stored data
+   *
+   * @param array<string, mixed> $data The stored data
+   *
+   * @return Reply The Reply instance
    */
-  public static function fromArray(array $data): static {
-    $reply = new static(
-      $data['status'] ?? 200,
-      self::unserializeBody($data['body'] ?? ''),
-      $data['content_type'] ?? 'text/html',
-      $data['headers'] ?? [],
+  public static function fromArray(array $data): Reply {
+    $reply = new self(
+        $data['status'] ?? 200,
+        self::unserializeBody($data['body'] ?? ''),
+        $data['content_type'] ?? 'text/html',
+        $data['headers'] ?? [],
     );
 
     if (isset($data['trailers'])) {
@@ -83,6 +101,8 @@ class Reply {
 
   /**
    * Implement JsonSerializable
+   *
+   * @return array<string, mixed>
    */
   public function jsonSerialize(): array {
     return $this->toArray();
@@ -154,11 +174,11 @@ class Reply {
   /**
    * Sets the Reply Content Type
    *
-   * @param int $type The HTTP content type. (Default `text/html`).
+   * @param string $type The HTTP content type. (Default `text/html`).
    *
    * @return Reply The current Reply instance.
    */
-  public function contentType($type): Reply {
+  public function contentType(string $type): Reply {
     $this->contentType = $type;
 
     return $this;
@@ -198,12 +218,14 @@ class Reply {
   /**
    * Sets the Reply Content Type
    *
-   * @param int $type The HTTP content type. (Default `text/html`).
+   * @param string $type The HTTP content type. (Default `text/html`).
    *
    * @return Reply The current Reply instance.
    */
   public function type($type): Reply {
-    return $this->contentType($type);
+    $this->contentType($type);
+
+    return $this;
   }
 
   /**
@@ -220,7 +242,7 @@ class Reply {
   /**
    * Gets the list of headers.
    *
-   * @return array An array of headers.
+   * @return array<string, mixed> An array of headers.
    */
   public function getHeaders(): array {
     return $this->headers;
@@ -323,7 +345,7 @@ class Reply {
   /**
    * Gets every registered Trailers for the current reply.
    *
-   * @return array An array of Trailers value.
+   * @return array<string, mixed> An array of Trailers value.
    */
   public function getTrailers(): array {
     return $this->trailers;
@@ -332,9 +354,11 @@ class Reply {
   /**
    * Checks if the provided header is declared as being a trailer.
    *
+   * @param string $name The header name.
+   *
    * @return bool True if it is a trailer, false otherwise.
    */
-  public function hasTrailer($name): bool {
+  public function hasTrailer(string $name): bool {
     return isset($this->trailers[$name]);
   }
 
@@ -356,7 +380,7 @@ class Reply {
    *
    * @return never|void
    */
-  public function send($data = null) {
+  public function send(mixed $data = null): void {
     if ($this->hijacked) {
       return;
     }
@@ -452,6 +476,10 @@ class Reply {
 
   /**
    * Handles body serialization based on content type
+   *
+   * @param mixed $body The body content
+   *
+   * @return string|array<string, mixed>
    */
   protected function serializeBody(mixed $body): string|array {
     if ($this->contentType === 'application/json') {
@@ -459,18 +487,20 @@ class Reply {
     }
 
     if (is_object($body) && method_exists($body, '__toString')) {
-      return (string)$body;
+      return (string) $body;
     }
 
     if (is_resource($body)) {
-      return stream_get_contents($body);
+      return stream_get_contents($body) ?: '';
     }
 
-    return (string)$body;
+    return (string) $body;
   }
 
   /**
    * Handles body unserialization based on content type
+   *
+   * @param mixed $body The body content
    */
   protected static function unserializeBody(mixed $body): mixed {
     if (is_array($body)) {
