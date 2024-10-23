@@ -61,7 +61,7 @@ class Router extends Singleton {
     Filters::add(['template_include', 'admin_'], static function () {
       $router = Router::getInstance();
       $router->resolve();
-    }, 9999, 1);
+    }, 99, 1);
 
     if ($req->isAction()) {
       AttributesManager::boot();
@@ -69,7 +69,7 @@ class Router extends Singleton {
       Filters::add('admin_init', static function () {
         $router = Router::getInstance();
         $router->resolveAdminActions();
-      }, 9999, 1);
+      }, 99, 1);
     }
   }
 
