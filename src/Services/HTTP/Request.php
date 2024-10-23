@@ -6,6 +6,7 @@ namespace Fern\Core\Services\HTTP;
 
 use Fern\Core\Factory\Singleton;
 use Fern\Core\Services\Actions\Action;
+use Fern\Core\Utils\JSON;
 
 class Request extends Singleton {
   /**
@@ -224,10 +225,10 @@ class Request extends Singleton {
 
     $this->setContentType($_SERVER["CONTENT_TYPE"]);
     $body = file_get_contents('php://input');
-    $json = json_decode($body, true);
 
     // If body is indeed valid JSON.
-    if (json_last_error() === JSON_ERROR_NONE) {
+    if (JSON::validate($body)) {
+      $json = JSON::decode($body, true);
       $this->setBody($json);
       return;
     }

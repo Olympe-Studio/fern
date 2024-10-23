@@ -8,6 +8,7 @@ use Fern\Core\Errors\FernConfigurationExceptions;
 use Fern\Core\Wordpress\Events;
 use Fern\Core\Wordpress\Filters;
 use Fern\Core\Factory\Singleton;
+use Fern\Core\Utils\JSON;
 
 class Config extends Singleton {
   /**
@@ -81,7 +82,7 @@ class Config extends Singleton {
    * @return string
    */
   public static function toJson(): string {
-    return json_encode(self::toArray());
+    return JSON::encode(self::toArray());
   }
 
   /**

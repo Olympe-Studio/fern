@@ -7,6 +7,7 @@ namespace Fern\Core\Services\HTTP;
 use Fern\Core\Config;
 use Fern\Core\Errors\ReplyParsingError;
 use Fern\Core\Fern;
+use Fern\Core\Utils\JSON;
 use Fern\Core\Wordpress\Events;
 use Fern\Core\Wordpress\Filters;
 
@@ -472,7 +473,7 @@ class Reply {
        * @return mixed  The filtered body content.
        */
       $body = Filters::apply('fern:core:reply:will_be_send', $body, $this);
-      $content = wp_json_encode($body);
+      $content = JSON::encode($body);
     } else {
 
       /**

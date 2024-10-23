@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Fern\Core\Services\Views\Engines;
 
 use Fern\Core\Services\Views\RenderingEngine;
-
+use Fern\Core\Utils\JSON;
 
 class Remote implements RenderingEngine {
   /**
@@ -56,7 +56,7 @@ class Remote implements RenderingEngine {
   public function render(string $template, array $data = []): string {
     $url = $this->url . '/' . $template;
     $response = wp_remote_post($url, [
-      'body' => json_encode($data),
+      'body' => JSON::encode($data),
       'timeout' => 2.5,
       'headers' => [
         'Content-Type' => 'application/json'
