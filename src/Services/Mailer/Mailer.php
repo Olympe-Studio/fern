@@ -66,7 +66,7 @@ class Mailer extends Singleton {
     $instance = self::getInstance();
     $config = $instance->getConfig();
 
-    if ($config === null) {
+    if ($config === null || !is_array($config)) {
       // Means the user don't want to configure mailer with Fern.
       return;
     }
