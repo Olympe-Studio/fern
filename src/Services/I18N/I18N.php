@@ -19,6 +19,10 @@ class I18N {
   public static function boot(): void {
     $config = Config::get('i18n', []);
 
+    if (empty($config) || $config === null) {
+      return;
+    }
+
     $path = $config['languages_folder_path']
       ?? Fern::getRoot() . self::DEFAULT_LANGUAGES_PATH;
     $domain = $config['domain'] ?? self::DEFAULT_DOMAIN;
