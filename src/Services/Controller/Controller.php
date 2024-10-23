@@ -12,7 +12,11 @@ interface Controller {
   public function handle(Request $request): Reply;
 
   /**
-   * @return static
+   * Return the unique instance of the class called.
+   *
+   * @param array<int, mixed> $args
+   *
+   * @return static The class classed as a unique instance.
    */
-  public static function getInstance(): self;
+  public static function getInstance(array ...$args): static ;
 }
