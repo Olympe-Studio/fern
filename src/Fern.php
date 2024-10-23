@@ -6,6 +6,7 @@ namespace Fern\Core;
 
 use Fern\Core\CLI\FernCLI;
 use Fern\Core\Factory\Singleton;
+use Fern\Core\Services\I18N\I18N;
 use Fern\Core\Services\Mailer\Mailer;
 use Fern\Core\Services\Router\Router;
 use Fern\Core\Services\Wordpress\Images;
@@ -56,6 +57,7 @@ class Fern extends Singleton {
    * @return void
    */
   private static function boot(): void {
+    I18N::boot();
     Autoloader::load();
 
     if (defined('WP_CLI') && constant('WP_CLI')) {
