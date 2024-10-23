@@ -91,7 +91,7 @@ class Task {
     call_user_func($this->getCallback(), ...$this->getArgs());
 
     if ($unschedule) {
-      Scheduler::unschedule($this->name);
+      Scheduler::unschedule($this->getName());
     }
   }
 
@@ -101,7 +101,7 @@ class Task {
    * @return bool
    */
   public function isScheduled(): bool {
-    return wp_next_scheduled($this->name) !== false;
+    return $this->getNextRun() !== false;
   }
 
   /**
@@ -110,6 +110,6 @@ class Task {
    * @return int|false Unix timestamp of next execution or false if not scheduled
    */
   public function getNextRun(): int|false {
-    return wp_next_scheduled($this->name);
+    return wp_next_scheduled($this->getName(), $this->getArgs());
   }
 }
