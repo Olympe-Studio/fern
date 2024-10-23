@@ -17,7 +17,7 @@ class Request extends Singleton {
   /**
    * @var mixed The parsed body of the request.
    */
-  private $body;
+  private mixed $body;
 
   /**
    * @var string The content type of the request.
@@ -27,7 +27,7 @@ class Request extends Singleton {
   /**
    * @var array The headers of the request.
    */
-  private $headers;
+  private array $headers;
 
   /**
    * @var string The HTTP method of the request (GET, POST, etc.).
@@ -45,34 +45,40 @@ class Request extends Singleton {
   private string $userAgent;
 
   /**
-   * @var array The uploaded files in the request.
+   * @var array|null The uploaded files in the request.
    */
-  private $files;
+  private ?array $files;
 
   /**
    * @var array The query parameters of the request.
    */
-  private $query;
+  private array $query;
 
   /**
    * @var string The full URL of the request.
    */
   private string $url;
 
+  /**
+   * @var array The cookies of the request.
+   */
+  private array $cookies;
+
   public function __construct() {
     $this->id = $this->getCurrentId();
-    $this->body = '';
-    $this->contentType = '';
-    $this->parseBody();
+    $this->contentType = $_SERVER["CONTENT_TYPE"] ?? '';
     $headers = function_exists('getallheaders') ? getallheaders() : [];
     unset($headers["Cookie"]);
     $this->headers = $headers;
-    $this->files = $_FILES;
-    $this->method = $_SERVER["REQUEST_METHOD"];
-    $this->requestedUri = $_SERVER['REQUEST_URI'];
-    $this->userAgent = $_SERVER['HTTP_USER_AGENT'];
+    $this->files = null;
+    $this->method = $_SERVER["REQUEST_METHOD"] ?? 'GET';
+    $this->requestedUri = $_SERVER['REQUEST_URI'] ?? '';
+    $this->userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+    $this->cookies = $_COOKIE ?? [];
     $this->url = untrailingslashit(get_home_url()) . $this->requestedUri;
     $this->query = $this->parseUrlParams();
+
+    $this->parseBody();
   }
 
   /**
@@ -89,36 +95,44 @@ class Request extends Singleton {
    *
    * @return void
    */
-  public function setFiles($files): void {
+  private function setFiles($files): void {
     $this->files = $files;
+  }
+
+  /**
+   * Gets the uploaded files.
+   *
+   * @return array|null
+   */
+  public function getFiles(): ?array {
+    return $this->files;
   }
 
   /**
    * Gets the current request TRUE ID
    *
-   * @return int|null
+   * @return int
    */
-  public function getCurrentId() {
+  public function getCurrentId(): int {
     $queriedObject = get_queried_object();
     $id = get_the_ID();
 
     if (!is_null($queriedObject) && is_object($queriedObject)) {
       $id = $queriedObject->ID ?? false;
     }
-    $termId = null;
 
     if (!$id) {
       if (!is_null($queriedObject)) {
         $termId = $queriedObject->term_id ?? null;
-        $termId = is_null($termId) ? null :  apply_filters('fern:core:http:request:queried_object', $termId);
+        if (!is_null($termId)) {
+          return apply_filters('fern:core:http:request:queried_object', $termId);
+        }
       }
+
+      return -1;
     }
 
-    if (!$id) {
-      $id = -1;
-    }
-
-    return (int) is_null($termId) ? $id : $termId;
+    return (int) $id;
   }
 
   /**
@@ -206,45 +220,32 @@ class Request extends Singleton {
    * @return void
    */
   private function parseBody(): void {
-    if (!isset($_SERVER["CONTENT_TYPE"])) {
+    if (empty($this->contentType)) {
+      $this->body = '';
       return;
     }
 
     // handles FormData javascript Objects.
-    if (isset($_SERVER["CONTENT_TYPE"]) && strpos($_SERVER["CONTENT_TYPE"], 'multipart/form-data') !== false) {
+    if (strpos($this->contentType, 'multipart/form-data') !== false) {
       $this->setFiles($_FILES);
-      $body = [
-        ...$_POST,
-        ...$this->files
-      ];
-
-      $this->setContentType($_SERVER["CONTENT_TYPE"]);
-      $this->setBody($body);
+      $this->setBody($_POST);
       return;
     }
 
-    $this->setContentType($_SERVER["CONTENT_TYPE"]);
-    $body = file_get_contents('php://input');
 
-    // If body is indeed valid JSON.
-    if (JSON::validate($body)) {
-      $json = JSON::decode($body, true);
-      $this->setBody($json);
+    $input = file_get_contents('php://input');
+
+    if (strpos($this->contentType, 'application/json') !== false) {
+      $this->body = json_decode($input, true) ?? $input;
       return;
     }
 
-    // It is HTML
-    if (stripos($body, '<!DOCTYPE html>') !== false) {
-      $this->setBody($body);
+    if (strpos($this->contentType, 'application/x-www-form-urlencoded') !== false) {
+      parse_str($input, $this->body);
       return;
     }
 
-    // it is XML
-    libxml_use_internal_errors(true);
-    $xml = @simplexml_load_string($body);
-    if ($xml) {
-      $this->setBody($body);
-    }
+    $this->body = $input;
   }
 
   /**
@@ -310,7 +311,7 @@ class Request extends Singleton {
    *
    * @return Request The current request instance.
    */
-  public function setContentType(string $type): Request {
+  private function setContentType(string $type): Request {
     $this->contentType = $type;
     return $this;
   }
@@ -322,7 +323,7 @@ class Request extends Singleton {
    *
    * @return Request The current request instance.
    */
-  public function setBody($body): Request {
+  private function setBody($body): Request {
     $this->body = $body;
     return $this;
   }
@@ -411,7 +412,7 @@ class Request extends Singleton {
    *
    * @return string.
    */
-  public function getContentType() {
+  public function getContentType(): string {
     return $this->contentType;
   }
 
@@ -499,7 +500,7 @@ class Request extends Singleton {
    *
    * @return Request  The current request Instance.
    */
-  public function setHeader($name, $value): Request {
+  private function setHeader($name, $value): Request {
     $this->headers[$name] = $value;
     return $this;
   }
@@ -568,8 +569,8 @@ class Request extends Singleton {
    *
    * @return array  An array of cookies.
    */
-  public function getCookies() {
-    return $_COOKIE;
+  public function getCookies(): array {
+    return $this->cookies;
   }
 
   /**
@@ -580,7 +581,18 @@ class Request extends Singleton {
    * @return string|null  The cookie value or null if it doesn't exists.
    */
   public function getCookie(string $cookie): ?string {
-    return $this->getCookies()[$cookie] ?? null;
+    return $this->cookies[$cookie] ?? null;
+  }
+
+  /**
+   * Checks if a cookie is set.
+   *
+   * @param string $cookie  The cookie name.
+   *
+   * @return bool  True if the cookie is set, false otherwise.
+   */
+  public function hasCookie(string $cookie): bool {
+    return isset($this->cookies[$cookie]);
   }
 
   /**
