@@ -11,6 +11,8 @@ use Fern\Core\Factory\Singleton;
 use Fern\Core\Services\Actions\Attributes\CacheHandler;
 use Fern\Core\Services\Actions\Attributes\CacheReply;
 use Fern\Core\Services\Actions\Attributes\CapabilitiesHandler;
+use Fern\Core\Services\Actions\Attributes\Nonce;
+use Fern\Core\Services\Actions\Attributes\NonceHandler;
 use Fern\Core\Services\Actions\Attributes\RequireCapabilities;
 use Fern\Core\Services\HTTP\Request;
 use Fern\Core\Wordpress\Filters;
@@ -30,6 +32,7 @@ class AttributesManager extends Singleton {
     $handlers = Filters::apply('fern:core:controller:attribute_handlers', [
       RequireCapabilities::class => [new CapabilitiesHandler(), 'handle'],
       CacheReply::class => [new CacheHandler(), 'handle'],
+      Nonce::class => [new NonceHandler(), 'handle'],
     ]);
 
     foreach ($handlers as $attributeClass => $handler) {
@@ -70,7 +73,6 @@ class AttributesManager extends Singleton {
     try {
       $reflection = new ReflectionMethod($controller, $methodName);
       $errors = [];
-
       foreach ($reflection->getAttributes() as $attribute) {
         $result = $this->handleAttribute($attribute, $controller, $methodName, $request);
         if ($result !== true) {
