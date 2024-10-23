@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 namespace Fern\Core\Services\HTTP;
 
@@ -15,25 +15,34 @@ use InvalidArgumentException;
  */
 class File {
   public readonly string $id;             // The field id.
+
   public readonly string $name;           // The original name of the file
+
   public readonly string $fileName;       // The name of the file without extension
+
   public readonly string $fileExtension;  // The file extension
+
   public readonly string $type;           // The MIME type of the file
+
   public readonly string $tmp_name;       // The temporary name of the file
+
   public readonly int $error;             // The error code associated with the file upload
+
   public readonly int $size;              // The size of the file in bytes
+
   private string|null $url;       // The URL of the uploaded file
+
   private string $fullPath;       // The full path to the file
 
   /**
    * Constructs a File object.
    *
-   * @param string $name Original name of the file.
+   * @param string $name     Original name of the file.
    * @param string $fullPath Full path to the file.
-   * @param string $type MIME type of the file.
+   * @param string $type     MIME type of the file.
    * @param string $tmp_name Temporary name of the file.
-   * @param int $error Error code associated with the file upload.
-   * @param int $size Size of the file in bytes.
+   * @param int    $error    Error code associated with the file upload.
+   * @param int    $size     Size of the file in bytes.
    */
   public function __construct(string $id, string $name, string $fullPath, string $type, string $tmp_name, int $error, int $size) {
     $this->id = $id;
@@ -82,42 +91,6 @@ class File {
   }
 
   /**
-   * Handle multiple file uploads for a single input
-   *
-   * @return array<int, self>
-   * @throws FileHandlingError
-   */
-  private static function handleMultipleFiles(string $key, array $data): array {
-    $files = [];
-    $errors = [];
-    $fileCount = count($data['name']);
-
-    for ($i = 0; $i < $fileCount; $i++) {
-      try {
-        $files[] = new self(
-          $key . '_' . $i,
-          $data['name'][$i],
-          $data['full_path'][$i],
-          $data['type'][$i],
-          $data['tmp_name'][$i],
-          $data['error'][$i],
-          $data['size'][$i]
-        );
-      } catch (InvalidArgumentException $e) {
-        $errors[] = "File {$data['name'][$i]}: {$e->getMessage()}";
-      }
-    }
-
-    if (!empty($errors)) {
-      throw new FileHandlingError(
-        "Failed to process multiple files:\n" . implode("\n", $errors)
-      );
-    }
-
-    return $files;
-  }
-
-  /**
    * Retrieves the list of file extensions that are not allowed for upload.
    *
    * @return array The list of disallowed file extensions.
@@ -127,37 +100,11 @@ class File {
      * Filter the list of disallowed file extensions.
      *
      * @filter fern:core:file:disallowed_upload_extensions
+     *
      * @return array<string>
      */
     return Filters::apply('fern:core:file:disallowed_upload_extensions', FileConstants::DISALLOWED_FILE_EXTENSIONS);
   }
-
-  /**
-   * Validate the MIME type of the file.
-   *
-   * @return bool Whether the MIME type is allowed or not.
-   */
-  private function validateMimeType(): bool {
-    $finfo = finfo_open(FILEINFO_MIME_TYPE);
-    if (!$finfo) {
-      throw new FileHandlingError('Failed to initialize fileinfo');
-    }
-
-    try {
-      $actualMime = finfo_file($finfo, $this->tmp_name);
-      /**
-       * Filter the list of allowed MIME types.
-       *
-       * @filter fern:core:file:allowed_mime_types
-       * @return array<string>
-       */
-      $allowedMimeTypes = Filters::apply('fern:core:file:allowed_mime_types', FileConstants::ALLOWED_MIME_TYPES);
-      return in_array($actualMime, $allowedMimeTypes, true);
-    } finally {
-      finfo_close($finfo);
-    }
-  }
-
 
   /**
    * Checks if the file extension of the uploaded file is allowed.
@@ -166,7 +113,8 @@ class File {
    */
   public function isFileExtensionAllowed() {
     $extensions = self::getNotAllowedFileExtensions();
-    return !in_array($this->fileExtension, array_map('strtolower', $extensions));
+
+    return !in_array($this->fileExtension, array_map('strtolower', $extensions), true);
   }
 
   /**
@@ -258,6 +206,208 @@ class File {
   }
 
   /**
+   * Delete the file from the server.
+   */
+  public function delete(): void {
+    if (file_exists($this->fullPath)) {
+      @unlink($this->fullPath);
+    }
+
+    if (file_exists($this->tmp_name)) {
+      @unlink($this->tmp_name);
+    }
+  }
+
+  /**
+   * Uploads the file to the server using WordPress functions.
+   *
+   * @param ?string $path The path to upload the file to. Must be within the WordPress uploads directory.
+   *
+   * @throws FileHandlingError
+   */
+  public function upload(?string $path = null): void {
+    if (!$this->canUpload()) {
+      throw new FileHandlingError('File cannot be uploaded.');
+    }
+
+    if ($path !== null) {
+      $path = ltrim($path, '/\\');
+      $uploadsDir = wp_upload_dir()['basedir'];
+      $fullPath = realpath($uploadsDir . '/' . $path);
+      $uploadsRealPath = realpath($uploadsDir);
+
+      if ($fullPath === false || $uploadsRealPath === false || !str_starts_with($fullPath, $uploadsRealPath)) {
+        throw new FileHandlingError('Invalid upload path. Path must be within the WordPress uploads directory.');
+      }
+    }
+
+    $uploadData = [
+      'name' => $this->getName(),
+      'type' => $this->getType(),
+      'tmp_name' => $this->getTmpName(),
+      'error' => $this->getError(),
+      'size' => $this->getSize(),
+    ];
+
+    if (!function_exists('wp_handle_upload')) {
+      $this->loadWordPressDependencies();
+    }
+
+    if ($path !== null) {
+      $uploadDirFilter = function ($uploads) use ($path) {
+        $path = trim($path, '/');
+        $uploads['path'] = $uploads['basedir'] . '/' . $path;
+        $uploads['url'] = $uploads['baseurl'] . '/' . $path;
+        $uploads['subdir'] = '/' . $path;
+
+        return $uploads;
+      };
+
+      Filters::add('upload_dir', $uploadDirFilter, 50, 1);
+    }
+
+    try {
+      Filters::add('upload_dir', [$this, 'validateUploadDir'], 20);
+      $upload = wp_handle_upload($uploadData, [
+        'test_form' => false,
+        'action' => 'local',
+        'unique_filename_callback' => [$this, 'makeFilenameUnique'],
+      ]);
+
+      if ($upload && isset($upload['error'])) {
+        throw new FileHandlingError('File upload failed : ' . $upload['error']);
+      }
+
+      $this->setFullPath($upload['file']);
+      $this->setUrl($upload['url']);
+    } finally {
+      if ($path !== null) {
+        remove_filter('upload_dir', $uploadDirFilter);
+      }
+      remove_filter('upload_dir', [$this, 'validateUploadDir'], 20);
+
+      // Delete the temporary file if it still exists
+      if (file_exists($this->tmp_name)) {
+        @unlink($this->tmp_name);
+      }
+    }
+  }
+
+  /**
+   * Validate the upload directory.
+   *
+   * @param array $uploads The upload directory data.
+   *
+   * @return array The validated upload directory data.
+   *
+   * @throws FileHandlingError
+   */
+  public function validateUploadDir(array $uploads): array {
+    if (!wp_mkdir_p($uploads['path'])) {
+      throw new FileHandlingError('Failed to create upload directory');
+    }
+
+    if (!wp_is_writable($uploads['path'])) {
+      throw new FileHandlingError('Upload directory is not writable');
+    }
+
+    return $uploads;
+  }
+
+  /**
+   * Make the filename unique by adding a suffix if necessary.
+   *
+   * @param string $dir  The directory to upload the file to.
+   * @param string $name The name of the file.
+   *
+   * @return string The unique filename.
+   */
+  public function makeFilenameUnique(string $dir, string $name): string {
+    return wp_unique_filename($dir, $name);
+  }
+
+  /**
+   * Parses the File object to an array suitable for uploading.
+   *
+   * @return array The File object as an associative array.
+   */
+  public function toArray(): array {
+    return [
+      'id' => $this->id,
+      'name' => $this->name,
+      'type' => $this->type,
+      'size' => $this->size,
+      'url' => $this->url,
+    ];
+  }
+
+  /**
+   * Handle multiple file uploads for a single input
+   *
+   * @return array<int, self>
+   *
+   * @throws FileHandlingError
+   */
+  private static function handleMultipleFiles(string $key, array $data): array {
+    $files = [];
+    $errors = [];
+    $fileCount = count($data['name']);
+
+    for ($i = 0; $i < $fileCount; $i++) {
+      try {
+        $files[] = new self(
+            $key . '_' . $i,
+            $data['name'][$i],
+            $data['full_path'][$i],
+            $data['type'][$i],
+            $data['tmp_name'][$i],
+            $data['error'][$i],
+            $data['size'][$i],
+        );
+      } catch (InvalidArgumentException $e) {
+        $errors[] = "File {$data['name'][$i]}: {$e->getMessage()}";
+      }
+    }
+
+    if (!empty($errors)) {
+      throw new FileHandlingError(
+          "Failed to process multiple files:\n" . implode("\n", $errors),
+      );
+    }
+
+    return $files;
+  }
+
+  /**
+   * Validate the MIME type of the file.
+   *
+   * @return bool Whether the MIME type is allowed or not.
+   */
+  private function validateMimeType(): bool {
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+
+    if (!$finfo) {
+      throw new FileHandlingError('Failed to initialize fileinfo');
+    }
+
+    try {
+      $actualMime = finfo_file($finfo, $this->tmp_name);
+      /**
+       * Filter the list of allowed MIME types.
+       *
+       * @filter fern:core:file:allowed_mime_types
+       *
+       * @return array<string>
+       */
+      $allowedMimeTypes = Filters::apply('fern:core:file:allowed_mime_types', FileConstants::ALLOWED_MIME_TYPES);
+
+      return in_array($actualMime, $allowedMimeTypes, true);
+    } finally {
+      finfo_close($finfo);
+    }
+  }
+
+  /**
    * Get the error message for the file upload.
    *
    * @return string The error message.
@@ -299,98 +449,6 @@ class File {
   }
 
   /**
-   * Delete the file from the server.
-   *
-   * @return void
-   */
-  public function delete(): void {
-    if (file_exists($this->fullPath)) {
-      @unlink($this->fullPath);
-    }
-
-    if (file_exists($this->tmp_name)) {
-      @unlink($this->tmp_name);
-    }
-  }
-
-  /**
-   * Uploads the file to the server using WordPress functions.
-   *
-   * @param ?string $path The path to upload the file to. Must be within the WordPress uploads directory.
-   *
-   * @throws FileHandlingError
-   * @return void
-   */
-  public function upload(?string $path = null): void {
-    if (!$this->canUpload()) {
-      throw new FileHandlingError('File cannot be uploaded.');
-    }
-
-    if ($path !== null) {
-      $path = ltrim($path, '/\\');
-      $uploadsDir = wp_upload_dir()['basedir'];
-      $fullPath = realpath($uploadsDir . '/' . $path);
-      $uploadsRealPath = realpath($uploadsDir);
-
-      if ($fullPath === false || $uploadsRealPath === false || !str_starts_with($fullPath, $uploadsRealPath)) {
-        throw new FileHandlingError('Invalid upload path. Path must be within the WordPress uploads directory.');
-      }
-    }
-
-    $uploadData = [
-      'name' => $this->getName(),
-      'type' => $this->getType(),
-      'tmp_name' => $this->getTmpName(),
-      'error' => $this->getError(),
-      'size' => $this->getSize()
-    ];
-
-
-    if (!function_exists('wp_handle_upload')) {
-      $this->loadWordPressDependencies();
-    }
-
-    if ($path !== null) {
-      $uploadDirFilter = function ($uploads) use ($path) {
-        $path = trim($path, '/');
-        $uploads['path'] = $uploads['basedir'] . '/' . $path;
-        $uploads['url'] = $uploads['baseurl'] . '/' . $path;
-        $uploads['subdir'] = '/' . $path;
-
-        return $uploads;
-      };
-
-      Filters::add('upload_dir', $uploadDirFilter, 50, 1);
-    }
-
-    try {
-      Filters::add('upload_dir', [$this, 'validateUploadDir'], 20);
-      $upload = wp_handle_upload($uploadData, [
-        'test_form' => false,
-        'action' => 'local',
-        'unique_filename_callback' => [$this, 'makeFilenameUnique']
-      ]);
-
-      if ($upload && isset($upload['error'])) {
-        throw new FileHandlingError('File upload failed : ' . $upload['error']);
-      }
-
-      $this->setFullPath($upload['file']);
-      $this->setUrl($upload['url']);
-    } finally {
-      if ($path !== null) {
-        remove_filter('upload_dir', $uploadDirFilter);
-      }
-      remove_filter('upload_dir', [$this, 'validateUploadDir'], 20);
-
-      // Delete the temporary file if it still exists
-      if (file_exists($this->tmp_name)) {
-        @unlink($this->tmp_name);
-      }
-    }
-  }
-
-  /**
    * Load the WordPress dependencies.
    *
    * @throws FileHandlingError
@@ -400,7 +458,7 @@ class File {
     $paths = [
       $root . 'public/wp/wp-admin/includes/file.php',
       $root . 'public/wp/wp-admin/includes/image.php',
-      $root . 'public/wp/wp-admin/includes/media.php'
+      $root . 'public/wp/wp-admin/includes/media.php',
     ];
 
     foreach ($paths as $path) {
@@ -410,53 +468,5 @@ class File {
 
       require_once $path;
     }
-  }
-
-  /**
-   * Validate the upload directory.
-   *
-   * @param array $uploads The upload directory data.
-   *
-   * @return array The validated upload directory data.
-   *
-   * @throws FileHandlingError
-   */
-  public function validateUploadDir(array $uploads): array {
-    if (!wp_mkdir_p($uploads['path'])) {
-      throw new FileHandlingError('Failed to create upload directory');
-    }
-
-    if (!wp_is_writable($uploads['path'])) {
-      throw new FileHandlingError('Upload directory is not writable');
-    }
-
-    return $uploads;
-  }
-
-  /**
-   * Make the filename unique by adding a suffix if necessary.
-   *
-   * @param string $dir The directory to upload the file to.
-   * @param string $name The name of the file.
-   *
-   * @return string The unique filename.
-   */
-  public function makeFilenameUnique(string $dir, string $name): string {
-    return wp_unique_filename($dir, $name);
-  }
-
-  /**
-   * Parses the File object to an array suitable for uploading.
-   *
-   * @return array The File object as an associative array.
-   */
-  public function toArray(): array {
-    return [
-      'id' => $this->id,
-      'name' => $this->name,
-      'type' => $this->type,
-      'size' => $this->size,
-      'url' => $this->url,
-    ];
   }
 }

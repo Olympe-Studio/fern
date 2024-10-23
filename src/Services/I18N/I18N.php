@@ -1,20 +1,20 @@
-<?php
+<?php declare(strict_types=1);
 
 namespace Fern\Core\Services\I18N;
 
 use Fern\Core\Config;
 use Fern\Core\Fern;
-
+use RuntimeException;
 
 class I18N {
   private const DEFAULT_DOMAIN = 'fern';
+
   private const DEFAULT_LANGUAGES_PATH = '/languages';
 
   /**
    * Boot the i18n configuration
    *
-   * @return void
-   * @throws \RuntimeException If languages directory is not readable
+   * @throws RuntimeException If languages directory is not readable
    */
   public static function boot(): void {
     $config = Config::get('i18n', []);
@@ -28,7 +28,7 @@ class I18N {
     $domain = $config['domain'] ?? self::DEFAULT_DOMAIN;
 
     if (!is_dir($path) || !is_readable($path)) {
-      throw new \RuntimeException("Languages directory not accessible: {$path}");
+      throw new RuntimeException("Languages directory not accessible: {$path}");
     }
 
     self::loadTextDomain($path, $domain);
@@ -37,9 +37,8 @@ class I18N {
   /**
    * Loads translation files for the current locale
    *
-   * @param string $path The languages folder path
+   * @param string $path   The languages folder path
    * @param string $domain The text domain
-   * @return void
    */
   public static function loadTextDomain(string $path, string $domain): void {
     $locale = determine_locale();
@@ -52,6 +51,7 @@ class I18N {
 
     // Try base locale if exact match fails - e.g. en_US becomes en
     $baseLocale = explode('_', $locale)[0] ?? '';
+
     if ($baseLocale && self::tryLoadMoFile($path, $domain, $baseLocale)) {
       return;
     }
@@ -65,8 +65,10 @@ class I18N {
    */
   private static function tryLoadMoFile(string $path, string $domain, string $locale): bool {
     $filePath = "{$path}/{$domain}-{$locale}.mo";
+
     if (file_exists($filePath)) {
       load_textdomain($domain, $filePath);
+
       return true;
     }
 
@@ -79,6 +81,7 @@ class I18N {
   private static function tryLoadWildcardMoFile(string $path, string $domain, string $locale): void {
     $pattern = "{$path}/{$domain}-{$locale}_*.mo";
     $files = glob($pattern);
+
     if (!empty($files)) {
       load_textdomain($domain, $files[0]);
     }

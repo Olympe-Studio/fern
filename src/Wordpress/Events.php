@@ -10,10 +10,10 @@ class Events {
   /**
    * Add an event handler to the event named. Alternative of add_action
    *
-   * @param string|string[]  $eventName     The name of the event to hook the callback to.
-   * @param callable         $callback      The callback
-   * @param int              $priority      The callback priority.
-   * @param int              $acceptedArgs  The number of arguments the function accept (by default Heracles will reflect it from the passed callback).
+   * @param string|string[] $eventName    The name of the event to hook the callback to.
+   * @param callable        $callback     The callback
+   * @param int             $priority     The callback priority.
+   * @param int             $acceptedArgs The number of arguments the function accept (by default Heracles will reflect it from the passed callback).
    *
    * @return void
    */
@@ -24,7 +24,6 @@ class Events {
   /**
    * Trigger an event with the passed arguments.
    *
-   * @param string  $eventName The name of the event to trigger.
    * @param mixed[] $args
    */
   public static function trigger(string $name, ...$args) {
@@ -34,14 +33,13 @@ class Events {
   /**
    * Trigger an event and return the output as a string.
    *
-   * @param string $name   The name of the event to trigger.
-   * @param mixed[] $args  The arguments to pass to the event.
-   *
-   * @return string
+   * @param string  $name The name of the event to trigger.
+   * @param mixed[] $args The arguments to pass to the event.
    */
   public static function renderToString(string $name, ...$args): string {
     ob_start();
     self::trigger($name, ...$args);
+
     return ob_get_clean();
   }
 

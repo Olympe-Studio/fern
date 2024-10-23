@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 namespace Fern\Core\Utils;
 
@@ -19,20 +19,41 @@ class Autoloader extends Singleton {
 
   /**
    * Get the includes path
-   *
-   * @return string
    */
   public static function getIncludesPath(): string {
     $instance = self::getInstance();
+
     return $instance->includesPath;
   }
 
   /**
+   * Boot the application
+   */
+  public static function load(): void {
+    $exists = file_exists(self::getIncludesPath());
+
+    // Include the includes.php file
+    if (!Fern::isDev() && $exists) {
+      require_once self::getIncludesPath();
+
+      return;
+    }
+
+    $controllers = self::getControllers();
+    $underscoreFiles = self::getUnderscoreFiles();
+
+    $allFiles = array_merge($controllers, $underscoreFiles);
+
+    // Create the includes.php file
+    if (Fern::isDev() || !$exists) {
+      self::createIncludesFile($allFiles);
+
+      require_once self::getIncludesPath();
+    }
+  }
+
+  /**
    * Get files recursively
-   *
-   * @param string $dir
-   *
-   * @return array
    */
   private static function getFilesRecursively(string $dir, ?callable $filter = null): array {
     $result = [];
@@ -42,8 +63,8 @@ class Autoloader extends Singleton {
     }
 
     $iterator = new RecursiveIteratorIterator(
-      new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS),
-      RecursiveIteratorIterator::SELF_FIRST
+        new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::SELF_FIRST,
     );
 
     foreach ($iterator as $fileInfo) {
@@ -58,6 +79,7 @@ class Autoloader extends Singleton {
     }
 
     sort($result);
+
     return $result;
   }
 
@@ -65,8 +87,6 @@ class Autoloader extends Singleton {
    * Create includes.php file
    *
    * @param array $files The files to include
-   *
-   * @return void
    */
   private static function createIncludesFile(array $files): void {
     $content = <<<PHP
@@ -86,12 +106,11 @@ PHP . PHP_EOL;
 
   /**
    * Get the controllers
-   *
-   * @return array
    */
   private static function getControllers(): array {
     $root = Fern::getRoot();
     $dir = trailingslashit($root) . 'App/Controllers';
+
     return self::getFilesRecursively($dir);
   }
 
@@ -100,43 +119,15 @@ PHP . PHP_EOL;
    *
    * In Fern, files starting with an underscore are considered procedural files
    * and are autoloaded.
-   *
-   * @return array
    */
   private static function getUnderscoreFiles(): array {
     $root = Fern::getRoot();
     $appPath = trailingslashit($root) . 'App';
+
     return self::getFilesRecursively($appPath, function ($fileInfo) {
-      return $fileInfo->isFile() &&
-        $fileInfo->getExtension() === 'php' &&
-        strpos($fileInfo->getFilename(), '_') === 0;
+      return $fileInfo->isFile()
+        && $fileInfo->getExtension() === 'php'
+        && strpos($fileInfo->getFilename(), '_') === 0;
     });
-  }
-
-  /**
-   * Boot the application
-   *
-   * @return void
-   */
-  public static function load(): void {
-    $exists = file_exists(self::getIncludesPath());
-
-    // Include the includes.php file
-    if (!Fern::isDev() && $exists) {
-      require_once self::getIncludesPath();
-      return;
-    }
-
-    $controllers = self::getControllers();
-    $underscoreFiles = self::getUnderscoreFiles();
-
-    $allFiles = array_merge($controllers, $underscoreFiles);
-
-    // Create the includes.php file
-    if (Fern::isDev() || !$exists) {
-      self::createIncludesFile($allFiles);
-
-      require_once self::getIncludesPath();
-    }
   }
 }

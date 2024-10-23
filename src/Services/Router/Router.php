@@ -11,9 +11,9 @@ use Fern\Core\Errors\AttributeValidationException;
 use Fern\Core\Errors\RouterException;
 use Fern\Core\Factory\Singleton;
 use Fern\Core\Services\Controller\AttributesManager;
+use Fern\Core\Services\Controller\ControllerResolver;
 use Fern\Core\Services\HTTP\Reply;
 use Fern\Core\Services\HTTP\Request;
-use Fern\Core\Services\Controller\ControllerResolver;
 use Fern\Core\Wordpress\Events;
 use Fern\Core\Wordpress\Filters;
 use ReflectionMethod;
@@ -23,11 +23,25 @@ use Throwable;
  * The Router class is responsible for resolving the request and calling the appropriate controller.
  */
 class Router extends Singleton {
+  /**
+   * @var array
+   */
   private const RESERVED_ACTIONS = ['handle', 'init', 'configure'];
-
+  /**
+   * @var Request
+   */
   private Request $request;
+  /**
+   * @var ControllerResolver
+   */
   private ControllerResolver $controllerResolver;
+  /**
+   * @var AttributesManager
+   */
   private AttributesManager $attributeManagerr;
+  /**
+   * @var array
+   */
   private array $config;
 
   public function __construct() {
@@ -39,8 +53,6 @@ class Router extends Singleton {
 
   /**
    * Get the config
-   *
-   * @return array
    */
   public function getConfig(): array {
     return $this->config;
@@ -48,8 +60,6 @@ class Router extends Singleton {
 
   /**
    * Boot the Router
-   *
-   * @return void
    */
   public static function boot(): void {
     /**
@@ -75,8 +85,6 @@ class Router extends Singleton {
 
   /**
    * Resolve the admin actions
-   *
-   * @return void
    */
   public function resolveAdminActions(): void {
     if ($this->shouldStop()) {
@@ -89,8 +97,6 @@ class Router extends Singleton {
 
   /**
    * Resolves the request and calls the appropriate controller.
-   *
-   * @return void
    */
   public function resolve(): void {
     Events::trigger('qm/start', 'fern:resolve_routes');
@@ -98,15 +104,18 @@ class Router extends Singleton {
 
     if ($this->shouldStop()) {
       Events::trigger('qm/stop', 'fern:resolve_routes');
+
       return;
     }
 
     if ($this->should404()) {
       $this->handle404();
+
       return;
     }
 
     $controller = $this->resolveController();
+
     if ($controller !== null) {
       if ($req->isGet()) {
         $this->handleGetRequest($controller);
@@ -119,9 +128,25 @@ class Router extends Singleton {
   }
 
   /**
+   * Handles a 404 error.
+   */
+  public function handle404(): void {
+    $controller = $this->controllerResolver->get404Controller();
+    $reply = $controller::getInstance()->handle($this->request);
+
+    if ($reply instanceof Reply) {
+      $reply->code(404);
+      Events::trigger('qm/stop', 'fern:resolve_routes');
+      $reply->send();
+    } else {
+      Events::trigger('qm/stop', 'fern:resolve_routes');
+
+      throw new RouterException('Controller handle method must return a Reply object ready to be sent.');
+    }
+  }
+
+  /**
    * Resolves the controller based on the request.
-   *
-   * @return string|null
    */
   private function resolveController(?string $viewType = 'view'): ?string {
     if ($viewType === 'admin') {
@@ -135,8 +160,8 @@ class Router extends Singleton {
        * In the context of multilingual sites, the ID might be an alternate language and we don't want to hardcode everyone of them.
        * This filter allows to change the ID to the appropriate one for the current language before resolving the controller.
        *
-       * @param int      $id   The ID to resolve.
-       * @param Request  $req  The current Request
+       * @param int     $id  The ID to resolve.
+       * @param Request $req The current Request
        *
        * @return int|null The resolved ID. When returning null, we will resolve the controller using its taxonomy or post_type instead.
        */
@@ -144,12 +169,13 @@ class Router extends Singleton {
 
       if (!is_numeric($id) || $id < 0) {
         if (!is_null($id)) {
-          throw new RouterException("Invalid ID: $id. Must be an integer greater than or equal to 0 or null.");
+          throw new RouterException("Invalid ID: {$id}. Must be an integer greater than or equal to 0 or null.");
         }
       }
 
       if (!is_null($id)) {
         $idController = $this->controllerResolver->resolve($viewType, (string) $id);
+
         if ($idController !== null) {
           return $idController;
         }
@@ -164,6 +190,7 @@ class Router extends Singleton {
     }
 
     $typeController = $this->controllerResolver->resolve($viewType, $type);
+
     if ($typeController !== null) {
       return $typeController;
     }
@@ -178,39 +205,17 @@ class Router extends Singleton {
 
   /**
    * Handles the admin controller.
-   *
-   * @return string|null
    */
   private function handleAdminController(): ?string {
     $page = $this->request->getUrlParam('page');
+
     return $this->controllerResolver->resolve('admin', $page);
-  }
-
-  /**
-   * Handles a 404 error.
-   *
-   * @return void
-   */
-  public function handle404(): void {
-    $controller = $this->controllerResolver->get404Controller();
-    $reply = $controller::getInstance()->handle($this->request);
-
-    if ($reply instanceof Reply) {
-      $reply->code(404);
-      Events::trigger('qm/stop', 'fern:resolve_routes');
-      $reply->send();
-    } else {
-      Events::trigger('qm/stop', 'fern:resolve_routes');
-      throw new RouterException("Controller handle method must return a Reply object ready to be sent.");
-    }
   }
 
   /**
    * Handles an action request.
    *
-   * @param string $controller
-   *
-   * @return void
+   * @param string $ctr The controller to handle the action
    *
    * @throws ActionException
    * @throws ActionNotFoundException
@@ -221,6 +226,7 @@ class Router extends Singleton {
     if ($action->isBadRequest()) {
       $reply = new Reply(400, 'Bad Request', 'text/plain');
       $reply->send();
+
       return;
     }
 
@@ -229,22 +235,23 @@ class Router extends Singleton {
       $controller = $ctr::getInstance();
 
       if ($this->isReservedOrMagicMethod($name)) {
-        throw new ActionException("Action '$name' is reserved or a magic method and cannot be used as an action name.");
+        throw new ActionException("Action '{$name}' is reserved or a magic method and cannot be used as an action name.");
       }
 
       if (!method_exists($controller, $name) || !$this->canRunAction($name, $controller)) {
-        throw new ActionNotFoundException("Action $name not found.");
+        throw new ActionNotFoundException("Action {$name} not found.");
       }
 
       $reflection = new ReflectionMethod($controller, $name);
+
       if (!$reflection->isPublic() || $reflection->isStatic()) {
-        throw new ActionException("Action $name must be a public and non-static method.");
+        throw new ActionException("Action {$name} must be a public and non-static method.");
       }
 
       $canRun = Filters::apply('fern:core:action:can_run', true, $action, $controller);
 
       if (!$canRun) {
-        throw new ActionNotFoundException("Action $name not found.");
+        throw new ActionNotFoundException("Action {$name} not found.");
       }
 
       $reply = $controller->{$name}($this->request, $action);
@@ -258,9 +265,8 @@ class Router extends Singleton {
   /**
    * Validates if an action can be executed and handles validation errors
    *
-   * @param string $name
-   * @param object $controller
-   * @param Reply|null $reply
+   * @param string $name The action name
+   * @param object $controller The controller instance
    *
    * @return bool
    */
@@ -268,26 +274,24 @@ class Router extends Singleton {
     try {
       $validation = $this->attributeManagerr->validateMethod(
         $controller,
-      $name,
-        $this->request
+        $name,
+        $this->request,
       );
     } catch (AttributeValidationException $e) {
       // Hide the error from the user
       error_log($e->getMessage());
+
       return false;
     }
 
-    if ($validation !== true) {
-      return false;
-    }
-
-    return true;
+    return ! ($validation !== true);
   }
 
   /**
    * Checks if a method name is reserved or a magic method.
    *
-   * @param string $methodName
+   * @param string $methodName The method name to check
+   *
    * @return bool
    */
   private function isReservedOrMagicMethod(string $methodName): bool {
@@ -297,7 +301,7 @@ class Router extends Singleton {
   /**
    * Handles a GET request.
    *
-   * @param string $controller
+   * @param string $controller The controller to handle the request
    *
    * @return void
    */
@@ -307,14 +311,12 @@ class Router extends Singleton {
     if ($reply instanceof Reply) {
       $reply->send();
     } else {
-      throw new RouterException("Controller handle method must return a Reply object ready to be sent.");
+      throw new RouterException('Controller handle method must return a Reply object ready to be sent.');
     }
   }
 
   /**
    * Checks if the request should stop the router from resolving.
-   *
-   * @param Request $req The request instance.
    *
    * @return bool
    */

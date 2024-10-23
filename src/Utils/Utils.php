@@ -9,11 +9,10 @@ use ReflectionFunction;
 use ReflectionMethod;
 
 class Utils {
-
   /**
    * Reflect a callable.
    *
-   * @param callable $callable  The callable to reflect
+   * @param callable $callable The callable to reflect
    *
    * @return ReflectionFunctionAbstract
    */
@@ -24,6 +23,7 @@ class Utils {
 
     if (is_string($callable)) {
       $pcs = explode('::', $callable);
+
       return count($pcs) > 1
         ? new ReflectionMethod($pcs[0], $pcs[1])
         : new ReflectionFunction($callable);
@@ -39,12 +39,13 @@ class Utils {
   /**
    * Get the number of arguments expected by a callable.
    *
-   * @param callable $callable  The callable to inspect.
+   * @param callable $callable The callable to inspect.
    *
    * @return int
    */
   public static function getCallableExpectedArgumentsNumber($callable) {
     $reflec = self::reflectCallable($callable);
+
     return $reflec->getNumberOfParameters();
   }
 }

@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 namespace Fern\Core\Services\Mailer;
 
@@ -33,7 +33,6 @@ class Mailer extends Singleton {
   /**
    * Validate the mailer configuration
    *
-   * @return bool
    * @throws FernMailerException
    */
   public function validateConfig(): bool {
@@ -41,7 +40,7 @@ class Mailer extends Singleton {
 
     foreach ($requiredKeys as $key) {
       if (!isset($this->config[$key]) || empty($this->config[$key])) {
-        throw new FernMailerException("Mailer configuration is invalid: missing or empty '$key'");
+        throw new FernMailerException("Mailer configuration is invalid: missing or empty '{$key}'");
       }
     }
 
@@ -59,7 +58,6 @@ class Mailer extends Singleton {
   /**
    * Boot the mailer
    *
-   * @return void
    * @throws FernMailerException
    */
   public static function boot(): void {

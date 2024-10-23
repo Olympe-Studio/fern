@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Fern\Core\Services\Controller;
 
 use Fern\Core\Errors\AttributeValidationException;
-use ReflectionMethod;
-use ReflectionAttribute;
 use Fern\Core\Factory\Singleton;
 use Fern\Core\Services\Actions\Attributes\CacheHandler;
 use Fern\Core\Services\Actions\Attributes\CacheReply;
@@ -16,6 +14,10 @@ use Fern\Core\Services\Actions\Attributes\NonceHandler;
 use Fern\Core\Services\Actions\Attributes\RequireCapabilities;
 use Fern\Core\Services\HTTP\Request;
 use Fern\Core\Wordpress\Filters;
+use InvalidArgumentException;
+use ReflectionAttribute;
+use ReflectionException;
+use ReflectionMethod;
 
 /**
  * Service to handle method attributes validation and execution
@@ -43,17 +45,17 @@ class AttributesManager extends Singleton {
   /**
    * Register a handler for an attribute
    *
-   * @param string $attributeClass The attribute class to handle
-   * @param callable $handler The handler function
+   * @param string   $attributeClass The attribute class to handle
+   * @param callable $handler        The handler function
    */
   public function register(string $attributeClass, callable $handler): void {
     if (is_array($handler) && count($handler) === 2) {
       if (!($handler[0] instanceof AttributesHandler)) {
-        throw new \InvalidArgumentException('Invalid handler provided for attribute. Handler must implement \Fern\Core\Services\Controller\AttributesHandler interface.');
+        throw new InvalidArgumentException('Invalid handler provided for attribute. Handler must implement \Fern\Core\Services\Controller\AttributesHandler interface.');
       }
     } else {
       if (!($handler instanceof AttributesHandler)) {
-        throw new \InvalidArgumentException('Invalid handler provided for attribute. Handler must implement \Fern\Core\Services\Controller\AttributesHandler interface.');
+        throw new InvalidArgumentException('Invalid handler provided for attribute. Handler must implement \Fern\Core\Services\Controller\AttributesHandler interface.');
       }
     }
 
@@ -63,18 +65,18 @@ class AttributesManager extends Singleton {
   /**
    * Validate and execute all attributes on a method
    *
-   * @param object $controller The controller instance
-   * @param string $methodName The method name to check
-   * @param Request $request The current request
-   *
-   * @return bool
+   * @param object  $controller The controller instance
+   * @param string  $methodName The method name to check
+   * @param Request $request    The current request
    */
   public function validateMethod(object $controller, string $methodName, Request $request): bool {
     try {
       $reflection = new ReflectionMethod($controller, $methodName);
       $errors = [];
+
       foreach ($reflection->getAttributes() as $attribute) {
         $result = $this->handleAttribute($attribute, $controller, $methodName, $request);
+
         if ($result !== true) {
           $errors[] = $result;
         }
@@ -82,23 +84,24 @@ class AttributesManager extends Singleton {
 
       if (!empty($errors)) {
         throw new AttributeValidationException(
-          sprintf(
-            'Validation failed for method %s::%s - %s',
-            get_class($controller),
-            $methodName,
-            implode(', ', $errors)
-          )
+            sprintf(
+              'Validation failed for method %s::%s - %s',
+              get_class($controller),
+              $methodName,
+              implode(', ', $errors),
+          ),
         );
       }
 
       return true;
-    } catch (\ReflectionException $e) {
+    } catch (ReflectionException $e) {
       throw new AttributeValidationException(
-        sprintf('Failed to validate method %s::%s - %s',
-          get_class($controller),
-          $methodName,
-          $e->getMessage()
-        )
+          sprintf(
+            'Failed to validate method %s::%s - %s',
+            get_class($controller),
+            $methodName,
+            $e->getMessage(),
+        ),
       );
     }
   }
@@ -107,19 +110,19 @@ class AttributesManager extends Singleton {
    * Handle a single attribute
    */
   private function handleAttribute(
-    ReflectionAttribute $attribute,
-    object $controller,
-    string $methodName,
-    Request $request
+      ReflectionAttribute $attribute,
+      object $controller,
+      string $methodName,
+      Request $request,
   ): bool|string {
     $attributeClass = $attribute->getName();
 
     if (isset($this->handlers[$attributeClass])) {
       return ($this->handlers[$attributeClass])(
-        $attribute,
-        $controller,
-        $methodName,
-        $request
+          $attribute,
+          $controller,
+          $methodName,
+          $request
       );
     }
 

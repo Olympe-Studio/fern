@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 namespace App\Controllers\Subdir;
 
@@ -8,14 +8,14 @@ use Fern\Core\Services\Controller\Controller;
 use Fern\Core\Services\HTTP\Reply;
 use Fern\Core\Services\HTTP\Request;
 
-
 class NameController extends Singleton implements Controller {
   public static string $handle = 'id_or_post_type_or_taxonomy';
 
   /**
    * Handle the request and return a reply.
    *
-   * @param Request $request
+   * @param Request $request The request
+   *
    * @return Reply
    */
   public function handle(Request $request): Reply {
@@ -25,9 +25,11 @@ class NameController extends Singleton implements Controller {
   /**
    * An exemple of an action that say Hello World.
    *
-   * @see https://fern.dev/actions
+   * @param Request $request The request
    *
    * @return Reply
+   *
+   * @see https://fern.dev/actions
    */
   public function sayHelloWorld(Request $request): Reply {
     $action = $request->getAction();
@@ -39,7 +41,11 @@ class NameController extends Singleton implements Controller {
   /**
    * An exemple of an action that is only available to users with the manage_options capability.
    *
+   * @param Request $request The request
+   *
    * @return Reply
+   *
+   * @see https://fern.dev/attributes/require-capabilities
    */
   #[RequireCapabilities(['manage_options'])]
   public function optionsManagerOnlyAction(Request $request): Reply {

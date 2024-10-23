@@ -10,13 +10,19 @@ use Fern\Core\Fern;
 use Fern\Core\Utils\JSON;
 use Fern\Core\Wordpress\Events;
 use Fern\Core\Wordpress\Filters;
+use RuntimeException;
 
 class Reply {
   private string $contentType;
+
   private $body;
+
   private $headers;
+
   private $trailers;
+
   private int $status;
+
   private bool $hijacked;
 
   public function __construct($status = 200, $body = '', $contentType = null, $headers = []) {
@@ -37,8 +43,6 @@ class Reply {
 
   /**
    * Converts the Reply to a storable array format
-   *
-   * @return array
    */
   public function toArray(): array {
     return [
@@ -49,22 +53,19 @@ class Reply {
       'status' => $this->status,
       'hijacked' => $this->hijacked,
       '__class' => static::class,
-      '__timestamp' => time()
+      '__timestamp' => time(),
     ];
   }
 
   /**
    * Creates a Reply instance from stored data
-   *
-   * @param array $data
-   * @return static
    */
   public static function fromArray(array $data): static {
     $reply = new static(
       $data['status'] ?? 200,
       self::unserializeBody($data['body'] ?? ''),
       $data['content_type'] ?? 'text/html',
-      $data['headers'] ?? []
+      $data['headers'] ?? [],
     );
 
     if (isset($data['trailers'])) {
@@ -88,45 +89,9 @@ class Reply {
   }
 
   /**
-   * Handles body serialization based on content type
-   *
-   * @param mixed $body
-   * @return string|array
-   */
-  protected function serializeBody(mixed $body): string|array {
-    if ($this->contentType === 'application/json') {
-      return is_array($body) ? $body : [];
-    }
-
-    if (is_object($body) && method_exists($body, '__toString')) {
-      return (string)$body;
-    }
-
-    if (is_resource($body)) {
-      return stream_get_contents($body);
-    }
-
-    return (string)$body;
-  }
-
-  /**
-   * Handles body unserialization based on content type
-   *
-   * @param mixed $body
-   * @return mixed
-   */
-  protected static function unserializeBody(mixed $body): mixed {
-    if (is_array($body)) {
-      return $body;
-    }
-
-    return (string) $body;
-  }
-
-  /**
    * Redirect the request.
    *
-   * @param string $to  The new location (URL) to redirect the request to.
+   * @param string $to The new location (URL) to redirect the request to.
    *
    * @return never|void
    */
@@ -143,7 +108,7 @@ class Reply {
   /**
    * Gets the reply body.
    *
-   * @return mixed  The body content.
+   * @return mixed The body content.
    */
   public function getBody(): mixed {
     return $this->body;
@@ -152,33 +117,35 @@ class Reply {
   /**
    * Sets the reply body.
    *
-   * @param mixed  $body  The body content.
+   * @param mixed $body The body content.
    *
-   * @return Reply  The current Reply instance.
+   * @return Reply The current Reply instance.
    */
   public function setBody($body): Reply {
     $this->body = $body;
+
     return $this;
   }
 
   /**
    * Sets the reply status code.
    *
-   * @param int $code  The status code to set.
+   * @param int $code The status code to set.
    *
-   * @return Reply  The current Reply instance.
+   * @return Reply The current Reply instance.
    */
   public function code(int $code): Reply {
     $this->status = $code;
+
     return $this;
   }
 
   /**
    * Alias of Reply::code()?.
    *
-   * @param int $code  The status code to set.
+   * @param int $code The status code to set.
    *
-   * @return Reply  The current Reply instance.
+   * @return Reply The current Reply instance.
    */
   public function statusCode(int $code): Reply {
     return $this->code($code);
@@ -187,19 +154,20 @@ class Reply {
   /**
    * Sets the Reply Content Type
    *
-   * @param int $type  The HTTP content type. (Default `text/html`).
+   * @param int $type The HTTP content type. (Default `text/html`).
    *
-   * @return Reply  The current Reply instance.
+   * @return Reply The current Reply instance.
    */
   public function contentType($type): Reply {
     $this->contentType = $type;
+
     return $this;
   }
 
   /**
    * Gets the Reply Content Type
    *
-   * @return string  The current Reply content type setting.
+   * @return string The current Reply content type setting.
    */
   public function getContentType(): string {
     return $this->contentType;
@@ -208,29 +176,31 @@ class Reply {
   /**
    * Halt the execution of the normal request lifecycle and prevent the Reply to be sent.
    *
-   * @return Reply  The current Reply instance.
+   * @return Reply The current Reply instance.
    */
   public function hijack(): Reply {
     $this->hijacked = true;
+
     return $this;
   }
 
   /**
    * Reset the Hijacking.
    *
-   * @return Reply  The current Reply instance.
+   * @return Reply The current Reply instance.
    */
   public function resetHijack(): Reply {
     $this->hijacked = false;
+
     return $this;
   }
 
   /**
    * Sets the Reply Content Type
    *
-   * @param int $type  The HTTP content type. (Default `text/html`).
+   * @param int $type The HTTP content type. (Default `text/html`).
    *
-   * @return Reply  The current Reply instance.
+   * @return Reply The current Reply instance.
    */
   public function type($type): Reply {
     return $this->contentType($type);
@@ -239,9 +209,9 @@ class Reply {
   /**
    * Sets the Reply status code.
    *
-   * @param int $code  The HTTP status code. (Default 200).
+   * @param int $code The HTTP status code. (Default 200).
    *
-   * @return Reply  The current Reply instance.
+   * @return Reply The current Reply instance.
    */
   public function status(int $code): Reply {
     return $this->code($code);
@@ -250,7 +220,7 @@ class Reply {
   /**
    * Gets the list of headers.
    *
-   * @return array  An array of headers.
+   * @return array An array of headers.
    */
   public function getHeaders(): array {
     return $this->headers;
@@ -259,9 +229,9 @@ class Reply {
   /**
    * Gets a specific header value.
    *
-   * @param string $key  The header name.
+   * @param string $key The header name.
    *
-   * @return mixed|null  The header value or null.
+   * @return mixed|null The header value or null.
    */
   public function getHeader(string $key): mixed {
     return $this->headers[$key] ?? null;
@@ -270,22 +240,23 @@ class Reply {
   /**
    * Sets a header.
    *
-   * @param string $key    The header name.
-   * @param mixed  $value  The header value.
+   * @param string $key   The header name.
+   * @param mixed  $value The header value.
    *
-   * @return Reply  The current Reply instance.
+   * @return Reply The current Reply instance.
    */
   public function setHeader(string $key, mixed $value): Reply {
     $this->headers[$key] = $value;
+
     return $this;
   }
 
   /**
    * Remove a header if it exists.
    *
-   * @param string $key    The header name.
+   * @param string $key The header name.
    *
-   * @return Reply  The current Reply instance.
+   * @return Reply The current Reply instance.
    */
   public function removeHeader(string $key): Reply {
     if ($this->hasHeader($key)) {
@@ -298,19 +269,20 @@ class Reply {
   /**
    * Remove every headers.
    *
-   * @return Reply  The current Reply instance.
+   * @return Reply The current Reply instance.
    */
   public function resetHeader(): Reply {
     $this->headers = [];
+
     return $this;
   }
 
   /**
    * Check if a specific header exists.
    *
-   * @param string $key  The header name.
+   * @param string $key The header name.
    *
-   * @return bool  True if it exists, false otherwise.
+   * @return bool True if it exists, false otherwise.
    */
   public function hasHeader(string $key): bool {
     return isset($this->headers[$key]);
@@ -320,34 +292,38 @@ class Reply {
    * Add a Trailer in the Reply.
    *
    * (If there is trailers, the `Transfer-Encoding: chunked` header will be added.)
+   *
    * @see https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Trailer
    *
-   * @param string $headerName  The name of the header for the Trailer to point to.
+   * @param string $headerName The name of the header for the Trailer to point to.
    *
-   * @return Reply  The current Reply.
+   * @return Reply The current Reply.
    */
   public function addTrailer(string $headerName, mixed $value): Reply {
     $this->trailers[$headerName] = $value;
+
     return $this;
   }
 
   /**
    * Remove a Trailer from the Reply
+   *
    * @see https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Trailer
    *
-   * @param string $headerName  The name of the header for the Trailer to point to.
+   * @param string $headerName The name of the header for the Trailer to point to.
    *
-   * @return Reply  The current Reply.
+   * @return Reply The current Reply.
    */
   public function removeTrailer(string $headerName): Reply {
     unset($this->trailers[$headerName]);
+
     return $this;
   }
 
   /**
    * Gets every registered Trailers for the current reply.
    *
-   * @return array   An array of Trailers value.
+   * @return array An array of Trailers value.
    */
   public function getTrailers(): array {
     return $this->trailers;
@@ -356,7 +332,7 @@ class Reply {
   /**
    * Checks if the provided header is declared as being a trailer.
    *
-   * @return bool  True if it is a trailer, false otherwise.
+   * @return bool True if it is a trailer, false otherwise.
    */
   public function hasTrailer($name): bool {
     return isset($this->trailers[$name]);
@@ -365,69 +341,19 @@ class Reply {
   /**
    * Remove every trailers
    *
-   * @return Reply  The current Reply.
+   * @return Reply The current Reply.
    */
   public function resetTrailers(): Reply {
     $this->trailers = [];
+
     return $this;
-  }
-  /**
-   * Apply the headers of the current Reply.
-   *
-   * @return void
-   */
-  private function applyHeaders(): void {
-    // Apply regular headers first
-    foreach ($this->headers as $name => $value) {
-      header("{$name}: {$value}");
-    }
-
-    // Handle chunked transfer encoding if trailers are present
-    if (!empty($this->trailers)) {
-      $this->removeHeader('Transfer-Encoding');
-      header('Transfer-Encoding: chunked');
-
-      // Content-Encoding should not be set to 'chunked'
-      // Remove this line: $this->removeHeader('Content-Encoding');
-      // Remove this line: header('Content-Encoding: chunked');
-
-      // Declare trailers
-      foreach ($this->trailers as $name => $value) {
-        header("Trailer: {$name}");
-      }
-    }
-  }
-
-  /**
-   * Apply the Trailers of the current Reply.
-   *
-   * @return void
-   */
-  private function applyTrailers(): void {
-    if (!empty($this->trailers)) {
-      // Ensure we're using chunked transfer encoding
-      if (!$this->hasHeader('Transfer-Encoding') || $this->getHeader('Transfer-Encoding') !== 'chunked') {
-        throw new \RuntimeException('Trailers can only be sent with chunked Transfer-Encoding');
-      }
-
-      // Send the last chunk to indicate the end of the body
-      echo "0\r\n";
-
-      // Send trailers
-      foreach ($this->trailers as $name => $value) {
-        echo "{$name}: {$value}\r\n";
-      }
-
-      // End of trailers
-      echo "\r\n";
-      flush();
-    }
   }
 
   /**
    * Sends the reply.
    *
    * @param mixed $data Optional data to send
+   *
    * @return never|void
    */
   public function send($data = null) {
@@ -443,8 +369,8 @@ class Reply {
       $this->body = [];
     }
 
-
     $req = Request::getCurrent();
+
     if ($req->isAction()) {
       $this->setHeader('X-FERN-ACTION-REPLY', true);
     }
@@ -470,23 +396,21 @@ class Reply {
        * @param mixed $body  The body content.
        * @param Reply $reply The current Reply instance.
        *
-       * @return mixed  The filtered body content.
+       * @return mixed The filtered body content.
        */
       $body = Filters::apply('fern:core:reply:will_be_send', $body, $this);
       $content = JSON::encode($body);
     } else {
-
       /**
        * Filters the body of the reply before it is sent.
        *
        * @param mixed $body  The body content.
        * @param Reply $reply The current Reply instance.
        *
-       * @return mixed  The filtered body content.
+       * @return mixed The filtered body content.
        */
       $content = Filters::apply('fern:core:reply:will_be_send', $body, $this);
     }
-
 
     $isChunked = $this->hasHeader('Transfer-Encoding') && $this->getHeader('Transfer-Encoding') === 'chunked';
 
@@ -497,6 +421,7 @@ class Reply {
     if ($isChunked) {
       // Send content in chunks
       $chunkSize = 4096;
+
       for ($i = 0; $i < strlen($content); $i += $chunkSize) {
         $chunk = substr($content, $i, $chunkSize);
         echo dechex(strlen($chunk)) . "\r\n" . $chunk . "\r\n";
@@ -518,10 +443,89 @@ class Reply {
     /**
      * Fires when the reply has been sent, just before exiting.
      *
-     * @param Reply $reply  The current Reply instance.
+     * @param Reply $reply The current Reply instance.
      */
     Events::trigger('fern:core:reply:has_been_sent', $this);
     Events::trigger('qm/stop', 'fern:resolve_routes');
     exit;
+  }
+
+  /**
+   * Handles body serialization based on content type
+   */
+  protected function serializeBody(mixed $body): string|array {
+    if ($this->contentType === 'application/json') {
+      return is_array($body) ? $body : [];
+    }
+
+    if (is_object($body) && method_exists($body, '__toString')) {
+      return (string)$body;
+    }
+
+    if (is_resource($body)) {
+      return stream_get_contents($body);
+    }
+
+    return (string)$body;
+  }
+
+  /**
+   * Handles body unserialization based on content type
+   */
+  protected static function unserializeBody(mixed $body): mixed {
+    if (is_array($body)) {
+      return $body;
+    }
+
+    return (string) $body;
+  }
+
+  /**
+   * Apply the headers of the current Reply.
+   */
+  private function applyHeaders(): void {
+    // Apply regular headers first
+    foreach ($this->headers as $name => $value) {
+      header("{$name}: {$value}");
+    }
+
+    // Handle chunked transfer encoding if trailers are present
+    if (!empty($this->trailers)) {
+      $this->removeHeader('Transfer-Encoding');
+      header('Transfer-Encoding: chunked');
+
+      // Content-Encoding should not be set to 'chunked'
+      // Remove this line: $this->removeHeader('Content-Encoding');
+      // Remove this line: header('Content-Encoding: chunked');
+
+      // Declare trailers
+      foreach ($this->trailers as $name => $value) {
+        header("Trailer: {$name}");
+      }
+    }
+  }
+
+  /**
+   * Apply the Trailers of the current Reply.
+   */
+  private function applyTrailers(): void {
+    if (!empty($this->trailers)) {
+      // Ensure we're using chunked transfer encoding
+      if (!$this->hasHeader('Transfer-Encoding') || $this->getHeader('Transfer-Encoding') !== 'chunked') {
+        throw new RuntimeException('Trailers can only be sent with chunked Transfer-Encoding');
+      }
+
+      // Send the last chunk to indicate the end of the body
+      echo "0\r\n";
+
+      // Send trailers
+      foreach ($this->trailers as $name => $value) {
+        echo "{$name}: {$value}\r\n";
+      }
+
+      // End of trailers
+      echo "\r\n";
+      flush();
+    }
   }
 }

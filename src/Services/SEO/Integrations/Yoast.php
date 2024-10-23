@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 namespace Fern\Core\Services\SEO\Integrations;
 
@@ -13,6 +13,7 @@ class Yoast implements SEOIntegration {
       ob_start();
       do_action('wpseo_head');
       remove_all_actions('wpseo_head');
+
       return ob_get_clean();
     }
 

@@ -1,5 +1,4 @@
-<?php
-
+<?php declare(strict_types=1);
 
 namespace Fern\Services\HTTP;
 
@@ -94,6 +93,6 @@ class FileConstants {
     'htpasswd',
     'ini',
     'jar',
-    'swf'
+    'swf',
   ];
 }

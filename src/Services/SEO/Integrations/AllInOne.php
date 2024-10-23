@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 namespace Fern\Core\Services\SEO\Integrations;
 
@@ -7,8 +7,6 @@ use Fern\Core\Services\SEO\SEOIntegration;
 class AllInOne implements SEOIntegration {
   /**
    * Get the helmet for All in One SEO.
-   *
-   * @return string
    */
   public static function getHelmet(): string {
     if (class_exists('AIOSEO\Plugin\Common\Main\Head')) {

@@ -20,11 +20,15 @@
   "scripts": {
     "test": [
       "pest"
-    ]
+    ],
+    "format": "php-cs-fixer fix --config=./phpcs.dist.php",
+    "format:check": "php-cs-fixer fix --config=./phpcs.dist.php --dry-run --diff"
+
   },
   "require-dev": {
     "pestphp/pest": "3.x-dev",
-    "php-stubs/wp-cli-stubs": "dev-master"
+    "php-stubs/wp-cli-stubs": "dev-master",
+    "friendsofphp/php-cs-fixer": "dev-master"
   },
   "config": {
     "allow-plugins": {

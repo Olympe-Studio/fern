@@ -9,18 +9,18 @@ use Fern\Core\Services\Scheduler\Scheduler;
  */
 class Task {
   /**
-   * @param string $name The unique name of the task
-   * @param string $interval The interval pattern (e.g. "every_5_minutes")
+   * @param string   $name     The unique name of the task
+   * @param string   $interval The interval pattern (e.g. "every_5_minutes")
    * @param callable $callback The callback function to execute
-   * @param array $args Arguments to pass to the callback
-   * @param int $startAt Unix timestamp when the task starts, -1 for immediate
+   * @param array    $args     Arguments to pass to the callback
+   * @param int      $startAt  Unix timestamp when the task starts, -1 for immediate
    */
   public function __construct(
-    private readonly string $name,
-    private readonly string $interval,
-    private readonly callable $callback,
-    private readonly array $args = [],
-    private readonly int $startAt = -1
+      private readonly string $name,
+      private readonly string $interval,
+      private readonly callable $callback,
+      private readonly array $args = [],
+      private readonly int $startAt = -1,
   ) {
   }
 
@@ -28,8 +28,6 @@ class Task {
    * Get a task by its name
    *
    * @param string $name The name of the task
-   *
-   * @return Task|null
    */
   public static function getByName(string $name): ?Task {
     return Scheduler::getTask($name);
@@ -37,8 +35,6 @@ class Task {
 
   /**
    * Get the name of the task
-   *
-   * @return string
    */
   public function getName(): string {
     return $this->name;
@@ -46,8 +42,6 @@ class Task {
 
   /**
    * Get the interval of the task
-   *
-   * @return string
    */
   public function getInterval(): string {
     return $this->interval;
@@ -55,8 +49,6 @@ class Task {
 
   /**
    * Get the callback of the task
-   *
-   * @return callable
    */
   public function getCallback(): callable {
     return $this->callback;
@@ -64,8 +56,6 @@ class Task {
 
   /**
    * Get the arguments of the task
-   *
-   * @return array
    */
   public function getArgs(): array {
     return $this->args;
@@ -73,8 +63,6 @@ class Task {
 
   /**
    * Get the start time of the task
-   *
-   * @return int
    */
   public function getStartAt(): int {
     return $this->startAt;
@@ -84,8 +72,6 @@ class Task {
    * Run the task now
    *
    * @param bool $unschedule Whether to unschedule the task after running
-   *
-   * @return void
    */
   public function runNow(bool $unschedule = false): void {
     call_user_func($this->getCallback(), ...$this->getArgs());
@@ -97,8 +83,6 @@ class Task {
 
   /**
    * Check if the task is currently scheduled in WordPress
-   *
-   * @return bool
    */
   public function isScheduled(): bool {
     return $this->getNextRun() !== false;

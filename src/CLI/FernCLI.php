@@ -1,7 +1,8 @@
-<?php
+<?php declare(strict_types=1);
 
 namespace Fern\Core\CLI;
 
+use RuntimeException;
 use WP_CLI;
 
 class FernCLI {
@@ -11,12 +12,10 @@ class FernCLI {
 
   /**
    * Boot the CLI
-   *
-   * @return FernCLI
    */
   public static function boot(): FernCLI {
     if (!defined('WP_CLI') || !constant('WP_CLI')) {
-      throw new \RuntimeException('WP CLI is not available.');
+      throw new RuntimeException('WP CLI is not available.');
     }
 
     return new self();

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Fern\Core\Factory;
 
-
 abstract class Singleton {
   private static array $_instances = [];
 

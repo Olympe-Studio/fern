@@ -17,6 +17,7 @@ use Twig\Error\RuntimeError;
 
 class Fern extends Singleton {
   const VERSION = '0.1.0';
+
   /**
    * Gets Fern current version.
    */
@@ -26,8 +27,6 @@ class Fern extends Singleton {
 
   /**
    * Checks if the current environment is development
-   *
-   * @return bool
    */
   public static function isDev(): bool {
     return defined('WP_ENV') && WP_ENV === 'development';
@@ -35,8 +34,6 @@ class Fern extends Singleton {
 
   /**
    * Checks if the current environment is not development
-   *
-   * @return bool
    */
   public static function isNotDev(): bool {
     return !self::isDev();
@@ -44,17 +41,35 @@ class Fern extends Singleton {
 
   /**
    * Get the root path
-   *
-   * @return string
    */
   public static function getRoot(): string {
     return Config::get('root');
   }
 
   /**
-   * Boot the application
+   * Defines fern configuration and boot the application
    *
-   * @return void
+   * @param array $config The configuration array
+   */
+  public static function defineConfig(array $config): void {
+    Events::trigger('fern:core:before_boot');
+    Events::trigger('qm/start', 'fern:boot');
+
+    Config::boot($config);
+    self::boot();
+
+    Events::trigger('qm/stop', 'fern:boot');
+    Events::trigger('fern:core:after_boot');
+
+    if (class_exists('\App\App') && method_exists('\App\App', 'boot')) {
+      \App\App::boot();
+    } else {
+      throw new RuntimeError('App class not found. You need to create an App.php class in the App namespace with a boot static method.');
+    }
+  }
+
+  /**
+   * Boot the application
    */
   private static function boot(): void {
     I18N::boot();
@@ -76,8 +91,6 @@ class Fern extends Singleton {
 
   /**
    * Boot the theme support
-   *
-   * @return void
    */
   private static function bootThemeSupport(): void {
     Events::addHandlers('after_setup_theme', static function () {
@@ -100,29 +113,5 @@ class Fern extends Singleton {
 
       register_nav_menus($menus);
     });
-  }
-
-  /**
-   * Defines fern configuration and boot the application
-   *
-   * @param array $config The configuration array
-   *
-   * @return void
-   */
-  public static function defineConfig(array $config): void {
-    Events::trigger('fern:core:before_boot');
-    Events::trigger('qm/start', 'fern:boot');
-
-    Config::boot($config);
-    self::boot();
-
-    Events::trigger('qm/stop', 'fern:boot');
-    Events::trigger('fern:core:after_boot');
-
-    if (class_exists('\App\App') && method_exists('\App\App', 'boot')) {
-      \App\App::boot();
-    } else {
-      throw new RuntimeError('App class not found. You need to create an App.php class in the App namespace with a boot static method.');
-    }
   }
 }

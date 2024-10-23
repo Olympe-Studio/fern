@@ -6,15 +6,14 @@ namespace Fern\Core\Services\Views\Engines;
 
 use Fern\Core\Services\Views\RenderingEngine;
 use Fern\Core\Utils\JSON;
+use InvalidArgumentException;
 
 class Remote implements RenderingEngine {
   /**
-   * @var string
    */
   private string $url;
 
   /**
-   * @var bool
    */
   private bool $sslverify;
 
@@ -25,9 +24,6 @@ class Remote implements RenderingEngine {
 
   /**
    * Boot the rendering engine
-   *
-   * @param array $config
-   * @return void
    */
   public function boot(): void {
   }
@@ -35,10 +31,8 @@ class Remote implements RenderingEngine {
   /**
    * Render a block
    *
-   * @param string $template  The name of the template to render
-   * @param array $data       The data to pass to the template
-   *
-   * @return string
+   * @param string $template The name of the template to render
+   * @param array  $data     The data to pass to the template
    */
   public function renderBlock(string $template, array $data = []): string {
     return $this->render($template, $data);
@@ -47,11 +41,10 @@ class Remote implements RenderingEngine {
   /**
    * Render a template
    *
-   * @param string $template  The name of the template to render
-   * @param array $data       The data to pass to the template
+   * @param string $template The name of the template to render
+   * @param array  $data     The data to pass to the template
    *
-   * @return string
-   * @throws \InvalidArgumentException
+   * @throws InvalidArgumentException
    */
   public function render(string $template, array $data = []): string {
     $url = $this->url . '/' . $template;
@@ -59,13 +52,13 @@ class Remote implements RenderingEngine {
       'body' => JSON::encode($data),
       'timeout' => 2.5,
       'headers' => [
-        'Content-Type' => 'application/json'
+        'Content-Type' => 'application/json',
       ],
       'sslverify' => $this->sslverify,
     ]);
 
     if (is_wp_error($response)) {
-      throw new \InvalidArgumentException('Failed to fetch template from remote server. Check that the URL is correct. WP Error: ' . $response->get_error_message());
+      throw new InvalidArgumentException('Failed to fetch template from remote server. Check that the URL is correct. WP Error: ' . $response->get_error_message());
     }
 
     return wp_remote_retrieve_body($response);

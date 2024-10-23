@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 namespace Fern\Core\Services\SEO\Integrations;
 
@@ -12,6 +12,7 @@ class TheSeoFramework implements SEOIntegration {
     if (function_exists('tsf')) {
       ob_start();
       tsf()->print_seo_meta_tags();
+
       return ob_get_clean();
     }
 

@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 namespace Fern\Core\Services\Controller;
 
@@ -27,7 +27,6 @@ class ControllerResolver extends Singleton {
   /** @var array Stores registered controllers */
   private array $controllers;
 
-
   public function __construct() {
     $this->controllers = [
       self::TYPE_VIEW => [],
@@ -39,8 +38,6 @@ class ControllerResolver extends Singleton {
 
   /**
    * Boots the ControllerResolver by processing all declared classes.
-   *
-   * @return void
    */
   public static function boot(): void {
     $instance = self::getInstance();
@@ -55,8 +52,6 @@ class ControllerResolver extends Singleton {
 
   /**
    * Register all admin menus from controllers
-   *
-   * @return void
    */
   public function registerAdminMenus(): void {
     foreach ($this->controllers[self::TYPE_ADMIN] as $controller) {
@@ -65,10 +60,88 @@ class ControllerResolver extends Singleton {
   }
 
   /**
-   * Register admin menu for a specific controller
+   * Processes a single class to determine if it's a valid controller and registers it if so.
    *
-   * @param string $controllerClass
-   * @return void
+   * @param string $className The name of the class to process
+   */
+  public function processClass(string $className): void {
+    $reflection = new ReflectionClass($className);
+
+    if (!$reflection->implementsInterface(Controller::class)) {
+      return;
+    }
+
+    $this->validateControllerClass($reflection);
+
+    $instance = $className::getInstance();
+    $type = $this->determineControllerType($reflection, $instance);
+    $handle = (string) $reflection->getProperty('handle')->getValue();
+
+    $this->register($type, $handle, $reflection->getName());
+  }
+
+  /**
+   * Register a controller.
+   *
+   * @param string $type The type of the controller (view, admin, or default)
+   */
+  public function register(string $type, string $handle, string $controller): void {
+    if ($type === self::TYPE_DEFAULT) {
+      $this->controllers[self::TYPE_DEFAULT] = $controller;
+
+      return;
+    }
+
+    if ($type === self::TYPE_404) {
+      $this->controllers[self::TYPE_404] = $controller;
+
+      return;
+    }
+
+    $handle = self::PREFIX . $handle;
+    $this->controllers[$type][$handle] = $controller;
+  }
+
+  /**
+   * Resolve a controller by its class name.
+   *
+   * @param string $type   The type of the controller (view, admin, or default)
+   * @param string $handle The handle of the controller
+   */
+  public function resolve(string $type, string $handle): string|null {
+    $handle = self::PREFIX . $handle;
+
+    return $this->controllers[$type][$handle] ?? null;
+  }
+
+  /**
+   * Get the default controller.
+   */
+  public function getDefaultController(): string|null {
+    $default = $this->controllers[self::TYPE_DEFAULT];
+
+    if (!$default) {
+      throw new ControllerRegistration('No default controller registered. Please register a default controller in  /App/Controller with handle set to `_default`.');
+    }
+
+    return $default;
+  }
+
+  /**
+   * Get the 404 controller.
+   */
+  public function get404Controller(): string|null {
+    $notFound = $this->controllers[self::TYPE_404];
+
+    if (!$notFound) {
+      throw new ControllerRegistration('No NotFound controller registered. Please register a 404 controller in  /App/Controller with handle set to `_404`.');
+    }
+
+    return $notFound;
+  }
+
+  /**
+   * Register admin menu for a specific controller
    */
   private function registerAdminMenu(string $controllerClass): void {
     $controller = $controllerClass::getInstance();
@@ -90,7 +163,7 @@ class ControllerResolver extends Singleton {
       'menu_slug' => '',
       'icon' => '',
       'position' => null,
-      'parent_slug' => null
+      'parent_slug' => null,
     ];
 
     $config = array_merge($defaults, $config);
@@ -109,22 +182,22 @@ class ControllerResolver extends Singleton {
     // Register the menu based on whether it's a submenu or top-level menu
     if ($config['parent_slug']) {
       add_submenu_page(
-        $config['parent_slug'],
-        $config['page_title'],
-        $config['menu_title'],
-        $config['capability'],
-        $config['menu_slug'],
-        $callback
+          $config['parent_slug'],
+          $config['page_title'],
+          $config['menu_title'],
+          $config['capability'],
+          $config['menu_slug'],
+          $callback,
       );
     } else {
       add_menu_page(
-        $config['page_title'],
-        $config['menu_title'],
-        $config['capability'],
-        $config['menu_slug'],
-        $callback,
-        $config['icon'],
-        $config['position']
+          $config['page_title'],
+          $config['menu_title'],
+          $config['capability'],
+          $config['menu_slug'],
+          $callback,
+          $config['icon'],
+          $config['position'],
       );
 
       // If there are submenu items defined, register them
@@ -138,16 +211,16 @@ class ControllerResolver extends Singleton {
           $submenu = array_merge([
             'capability' => $config['capability'],
             'menu_slug' => '',
-            'callback' => $callback
+            'callback' => $callback,
           ], $submenu);
 
           add_submenu_page(
-            $config['menu_slug'],
-            $submenu['page_title'],
-            $submenu['menu_title'],
-            $submenu['capability'],
-            $submenu['menu_slug'],
-            $submenu['callback']
+              $config['menu_slug'],
+              $submenu['page_title'],
+              $submenu['menu_title'],
+              $submenu['capability'],
+              $submenu['menu_slug'],
+              $submenu['callback'],
           );
         }
       }
@@ -155,35 +228,10 @@ class ControllerResolver extends Singleton {
   }
 
   /**
-   * Processes a single class to determine if it's a valid controller and registers it if so.
-   *
-   * @param string $className The name of the class to process
-   * @return void
-   */
-  public function processClass(string $className): void {
-    $reflection = new ReflectionClass($className);
-
-    if (!$reflection->implementsInterface(Controller::class)) {
-      return;
-    }
-
-    $this->validateControllerClass($reflection);
-
-    $instance = $className::getInstance();
-    $type = $this->determineControllerType($reflection, $instance);
-    $handle = (string) $reflection->getProperty('handle')->getValue();
-
-    $this->register($type, $handle, $reflection->getName());
-  }
-
-  /**
    * Validates that a controller class has the required 'handle' property.
    *
-   * @param ReflectionClass $reflection
    *
    * @throws ControllerRegistration if the class doesn't meet the requirements
-   *
-   * @return void
    */
   private function validateControllerClass(ReflectionClass $reflection): void {
     $className = $reflection->getName();
@@ -200,8 +248,6 @@ class ControllerResolver extends Singleton {
   /**
    * Determines the type of a controller based on its properties.
    *
-   * @param ReflectionClass $reflection
-   * @param object $instance
    *
    * @return string The determined controller type
    */
@@ -219,78 +265,11 @@ class ControllerResolver extends Singleton {
     }
 
     $traits = $reflection->getTraitNames();
-    if (in_array('Fern\Core\Services\Controller\AdminController', $traits)) {
+
+    if (in_array('Fern\Core\Services\Controller\AdminController', $traits, true)) {
       return self::TYPE_ADMIN;
     }
 
     return self::TYPE_VIEW;
-  }
-
-  /**
-   * Register a controller.
-   *
-   * @param string $type The type of the controller (view, admin, or default)
-   * @param string $handle
-   * @param string $controller
-   *
-   * @return void
-   */
-  public function register(string $type, string $handle, string $controller): void {
-    if ($type === self::TYPE_DEFAULT) {
-      $this->controllers[self::TYPE_DEFAULT] = $controller;
-      return;
-    }
-
-    if ($type === self::TYPE_404) {
-      $this->controllers[self::TYPE_404] = $controller;
-      return;
-    }
-
-    $handle = self::PREFIX . $handle;
-    $this->controllers[$type][$handle] = $controller;
-  }
-
-  /**
-   * Resolve a controller by its class name.
-   *
-   * @param string $type    The type of the controller (view, admin, or default)
-   * @param string $handle  The handle of the controller
-   *
-   * @return string|null
-   */
-  public function resolve(string $type, string $handle): string|null {
-    $handle = self::PREFIX . $handle;
-
-    return $this->controllers[$type][$handle] ?? null;
-  }
-
-  /**
-   * Get the default controller.
-   *
-   * @return string|null
-   */
-  public function getDefaultController(): string|null {
-    $default = $this->controllers[self::TYPE_DEFAULT];
-
-    if (!$default) {
-      throw new ControllerRegistration('No default controller registered. Please register a default controller in  /App/Controller with handle set to `_default`.');
-    }
-
-    return $default;
-  }
-
-  /**
-   * Get the 404 controller.
-   *
-   * @return string|null
-   */
-  public function get404Controller(): string|null {
-    $notFound = $this->controllers[self::TYPE_404];
-
-    if (!$notFound) {
-      throw new ControllerRegistration('No NotFound controller registered. Please register a 404 controller in  /App/Controller with handle set to `_404`.');
-    }
-
-    return $notFound;
   }
 }

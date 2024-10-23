@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Fern\Core;
 
 use Fern\Core\Errors\FernConfigurationExceptions;
-use Fern\Core\Wordpress\Events;
-use Fern\Core\Wordpress\Filters;
 use Fern\Core\Factory\Singleton;
 use Fern\Core\Utils\JSON;
+use Fern\Core\Wordpress\Events;
+use Fern\Core\Wordpress\Filters;
 
 class Config extends Singleton {
   /**
@@ -26,10 +26,10 @@ class Config extends Singleton {
   /**
    * Get a configuration value by key
    *
-   * @param  string  $key      The configuration key. Support dot notation like `seo.flags.sitemap`.
-   * @param  mixed   $default  The default value if the key is not found
+   * @param string $key     The configuration key. Support dot notation like `seo.flags.sitemap`.
+   * @param mixed  $default The default value if the key is not found
    *
-   * @return mixed   The configuration value or default
+   * @return mixed The configuration value or default
    */
   public static function get(string $key, $default = null) {
     $keys = explode('.', $key);
@@ -49,7 +49,7 @@ class Config extends Singleton {
   /**
    * Checks if a configuration exists.
    *
-   * @param  string  $key      The configuration key. Support dot notation like `seo.flags.sitemap`.
+   * @param string $key The configuration key. Support dot notation like `seo.flags.sitemap`.
    *
    * @return boolean
    */
@@ -64,13 +64,12 @@ class Config extends Singleton {
    */
   public static function all(): array {
     $instance = static::getInstance();
+
     return $instance->config;
   }
 
   /**
    * Show the config as an array
-   *
-   * @return array
    */
   public static function toArray(): array {
     return static::all();
@@ -78,8 +77,6 @@ class Config extends Singleton {
 
   /**
    * Show the config as json
-   *
-   * @return string
    */
   public static function toJson(): string {
     return JSON::encode(self::toArray());
@@ -98,8 +95,6 @@ class Config extends Singleton {
    * Boot the configuration
    *
    * @param array $config The configuration array
-   *
-   * @return void
    */
   public static function boot($config): void {
     $instance = static::getInstance();

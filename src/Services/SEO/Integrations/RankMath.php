@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 namespace Fern\Core\Services\SEO\Integrations;
 
@@ -13,6 +13,7 @@ class RankMath implements SEOIntegration {
       ob_start();
       do_action('rank_math/head');
       remove_all_actions('rank_math/head');
+
       return ob_get_clean();
     }
 

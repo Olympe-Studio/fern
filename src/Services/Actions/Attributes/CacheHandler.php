@@ -7,9 +7,9 @@ namespace Fern\Core\Services\Actions\Attributes;
 use Fern\Core\Fern;
 use Fern\Core\Services\Controller\AttributesHandler;
 use Fern\Core\Services\HTTP\Reply;
-use ReflectionAttribute;
 use Fern\Core\Services\HTTP\Request;
 use Fern\Core\Utils\Cache;
+use ReflectionAttribute;
 use Throwable;
 
 /**
@@ -24,18 +24,18 @@ class CacheHandler implements AttributesHandler {
   /**
    * Handle the Cache attribute
    *
-   * @param ReflectionAttribute $attribute The attribute instance
-   * @param object $controller The controller instance
-   * @param string $methodName The method name
-   * @param Request $request The current request
+   * @param ReflectionAttribute $attribute  The attribute instance
+   * @param object              $controller The controller instance
+   * @param string              $methodName The method name
+   * @param Request             $request    The current request
    *
    * @return bool|string Returns true if the attribute is valid, or an error message
    */
   public function handle(
-    ReflectionAttribute $attribute,
-    object $controller,
-    string $methodName,
-    Request $request
+      ReflectionAttribute $attribute,
+      object $controller,
+      string $methodName,
+      Request $request,
   ): bool|string {
     $reflection = $attribute->newInstance();
 
@@ -65,18 +65,12 @@ class CacheHandler implements AttributesHandler {
     $reply = $controller->{$methodName}($request);
     Cache::set($cacheKey, $reply->toArray(), true, $ttl);
     $reply->send();
+
     return true;
   }
 
   /**
    * Generate a cache key
-   *
-   * @param string $key
-   * @param object $controller
-   * @param array $varyBy
-   * @param Request $request
-   *
-   * @return string
    */
   private function generateCacheKey(?string $key, object $controller, array $varyBy, Request $request): string {
     $action = $request->getAction();
