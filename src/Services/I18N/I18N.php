@@ -24,7 +24,7 @@ class I18N {
     }
 
     $path = $config['languages_folder_path']
-      ?? Fern::getRoot() . self::DEFAULT_LANGUAGES_PATH;
+      ?? untrailingslashit(Fern::getRoot()) . self::DEFAULT_LANGUAGES_PATH;
     $domain = $config['domain'] ?? self::DEFAULT_DOMAIN;
 
     if (!is_dir($path) || !is_readable($path)) {
