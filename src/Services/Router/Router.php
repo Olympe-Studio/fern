@@ -131,9 +131,28 @@ class Router extends Singleton {
     $id = $this->request->getCurrentId();
 
     if ($id !== null) {
-      $idController = $this->controllerResolver->resolve($viewType, (string) $id);
-      if ($idController !== null) {
-        return $idController;
+      /**
+       * In the context of multilingual sites, the ID might be an alternate language and we don't want to hardcode everyone of them.
+       * This filter allows to change the ID to the appropriate one for the current language before resolving the controller.
+       *
+       * @param int      $id   The ID to resolve.
+       * @param Request  $req  The current Request
+       *
+       * @return int|null The resolved ID. When returning null, we will resolve the controller using its taxonomy or post_type instead.
+       */
+      $id = Filters::apply('fern:core:router:resolve_id', (int) $id, $this->request);
+
+      if (!is_numeric($id) || $id < 0) {
+        if (!is_null($id)) {
+          throw new RouterException("Invalid ID: $id. Must be an integer greater than or equal to 0 or null.");
+        }
+      }
+
+      if (!is_null($id)) {
+        $idController = $this->controllerResolver->resolve($viewType, (string) $id);
+        if ($idController !== null) {
+          return $idController;
+        }
       }
     }
 
