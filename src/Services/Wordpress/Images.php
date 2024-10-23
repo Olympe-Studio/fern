@@ -19,8 +19,19 @@ use Fern\Core\Wordpress\Filters;
 class Images {
   /** @var array The configuration for image processing */
   protected array $config;
-  /** @var int The default JPEG quality is 100 to prevent lossy compression */
+  /** @var int The default JPEG quality */
   protected const DEFAULT_JPEG_QUALITY = 100;
+  /** @var array Default settings when not specified */
+  protected const DEFAULT_SETTINGS = [
+    'disable_image_sizes' => false,
+    'disable_other_image_sizes' => false,
+    'disable_image_editing' => false,
+    'remove_default_image_sizes' => false,
+    'disable_responsive_images' => false,
+    'prevent_image_resizes_on_upload' => false,
+    'jpeg_quality' => self::DEFAULT_JPEG_QUALITY,
+    'custom_sizes' => [],
+  ];
 
 
   /**
@@ -29,7 +40,7 @@ class Images {
    * @param array $config The configuration array for image processing
    */
   public function __construct(array $config) {
-    $this->config = $config;
+    $this->config = $this->normalizeConfig($config);
     $this->validateConfig();
     $this->init();
   }
@@ -45,34 +56,129 @@ class Images {
   }
 
   /**
-   * Initialize the Images service
-   *
-   * This method determines whether to disable image processing or set up custom image sizes based on the configuration.
+   * Initialize the Images service by applying all active settings
    *
    * @return void
    */
   protected function init(): void {
-    if ($this->config['disabled']) {
+    $settings = $this->config;
+
+    // Always set JPEG quality
+    Filters::add('jpeg_quality', [$this, 'setJpegQuality']);
+
+    if ($settings['disabled']) {
       $this->disableImageProcessing();
-    } else {
-      $this->setupCustomImageSizes();
+      return;
     }
+
+    $settings = $settings['settings'];
+
+    if ($settings['disable_image_sizes']) {
+      Filters::add('intermediate_image_sizes_advanced', [$this, 'disableImageSizes']);
+      Filters::add('big_image_size_threshold', '__return_false');
+    }
+
+    if ($settings['disable_other_image_sizes']) {
+      Events::addHandlers('init', [$this, 'disableOtherImageSizes']);
+    }
+
+    if ($settings['disable_image_editing']) {
+      Filters::add('wp_image_editors', [$this, 'disableImageEditing']);
+    }
+
+    if ($settings['remove_default_image_sizes']) {
+      Filters::add('intermediate_image_sizes_advanced', [$this, 'removeDefaultImageSizes']);
+    }
+
+    if ($settings['disable_responsive_images']) {
+      Filters::add('max_srcset_image_width', [$this, 'disableResponsiveImages']);
+    }
+
+    if ($settings['prevent_image_resizes_on_upload']) {
+      Filters::add('wp_generate_attachment_metadata', [$this, 'preventImageResizesOnUpload'], 10, 1);
+    }
+
+    if (!empty($settings['custom_sizes'])) {
+      Events::addHandlers('after_setup_theme', [$this, 'addCustomImageSizes']);
+      Filters::add('image_size_names_choose', [$this, 'addCustomImageSizesToEditor']);
+    }
+  }
+
+
+  /**
+   * Normalize the configuration by merging with defaults
+   *
+   * @param array $config
+   * @return array
+   */
+  protected function normalizeConfig(array $config): array {
+    // If disabled is true, apply all disable settings
+    if (!empty($config['disabled']) && $config['disabled'] === true) {
+      return [
+        'disabled' => true,
+        'settings' => array_merge(self::DEFAULT_SETTINGS, [
+          'disable_image_sizes' => true,
+          'disable_other_image_sizes' => true,
+          'disable_image_editing' => true,
+          'remove_default_image_sizes' => true,
+          'disable_responsive_images' => true,
+          'prevent_image_resizes_on_upload' => true,
+        ])
+      ];
+    }
+
+    // Merge with defaults while preserving custom settings
+    return [
+      'disabled' => $config['disabled'] ?? false,
+      'settings' => array_merge(self::DEFAULT_SETTINGS, $config['settings'] ?? [])
+    ];
   }
 
   /**
    * Validate the configuration
    *
-   * @return void
+   * @throws \InvalidArgumentException
    */
   protected function validateConfig(): void {
     if (!is_bool($this->config['disabled'])) {
       throw new \InvalidArgumentException("The 'disabled' option must be a boolean.");
     }
 
-    if (isset($this->config['settings']['jpegQuality'])) {
-      $quality = $this->config['settings']['jpegQuality'];
+    $settings = $this->config['settings'];
+
+    // Validate boolean settings
+    $booleanSettings = [
+      'disable_image_sizes',
+      'disable_other_image_sizes',
+      'disable_image_editing',
+      'remove_default_image_sizes',
+      'disable_responsive_images',
+      'prevent_image_resizes_on_upload',
+    ];
+
+    foreach ($booleanSettings as $setting) {
+      if (isset($settings[$setting]) && !is_bool($settings[$setting])) {
+        throw new \InvalidArgumentException("The '$setting' option must be a boolean.");
+      }
+    }
+
+    // Validate JPEG quality
+    if (isset($settings['jpeg_quality'])) {
+      $quality = $settings['jpeg_quality'];
       if (!is_int($quality) || $quality < 0 || $quality > 100) {
         throw new \InvalidArgumentException("JPEG quality must be an integer between 0 and 100.");
+      }
+    }
+
+    // Validate custom sizes
+    if (isset($settings['custom_sizes'])) {
+      foreach ($settings['custom_sizes'] as $name => $size) {
+        if (!isset($size['width'], $size['height'])) {
+          throw new \InvalidArgumentException("Invalid custom size configuration for '$name', both width and height must be set.");
+        }
+        if (isset($size['crop']) && !is_bool($size['crop'])) {
+          throw new \InvalidArgumentException("The 'crop' option for '$name' must be a boolean.");
+        }
       }
     }
   }
@@ -103,7 +209,7 @@ class Images {
    * @return void
    */
   protected function setupCustomImageSizes(): void {
-    if (!empty($this->config['settings']['customSizes'])) {
+    if (!empty($this->config['settings']['custom_sizes'])) {
       Events::addHandlers('after_setup_theme', [$this, 'addCustomImageSizes']);
       Filters::add('image_size_names_choose', [$this, 'addCustomImageSizesToEditor']);
     }
@@ -161,7 +267,7 @@ class Images {
    * @return int The JPEG quality setting from the configuration, or 100 if not set
    */
   public function setJpegQuality(): int {
-    return $this->config['settings']['jpegQuality'] ?? self::DEFAULT_JPEG_QUALITY;
+    return $this->config['settings']['jpeg_quality'] ?? self::DEFAULT_JPEG_QUALITY;
   }
 
   /**
@@ -195,11 +301,11 @@ class Images {
    * @return void
    */
   public function addCustomImageSizes(): void {
-    if (!isset($this->config['settings']['customSizes'])) {
+    if (!isset($this->config['settings']['custom_sizes'])) {
       return;
     }
 
-    foreach ($this->config['settings']['customSizes'] as $name => $size) {
+    foreach ($this->config['settings']['custom_sizes'] as $name => $size) {
       if (!isset($size['width'], $size['height'])) {
         throw new \InvalidArgumentException("Invalid custom size configuration for '$name', both width and height must be set.");
       }
@@ -217,7 +323,7 @@ class Images {
    * @return array The modified list of image sizes including custom sizes
    */
   public function addCustomImageSizesToEditor(array $sizes): array {
-    foreach ($this->config['settings']['customSizes'] as $name => $size) {
+    foreach ($this->config['settings']['custom_sizes'] as $name => $size) {
       if (!isset($size['width'], $size['height'])) {
         throw new \InvalidArgumentException("Invalid custom size configuration for '$name', both width and height must be set.");
       }
