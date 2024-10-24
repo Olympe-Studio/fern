@@ -1096,12 +1096,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/pestphp/pest.git",
-                "reference": "0b7f4f2384006c78dc20daaf53dd1e863a0ab708"
+                "reference": "eaeb133c77f3f5382620f0307c3b45b34961bcfc"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/pestphp/pest/zipball/0b7f4f2384006c78dc20daaf53dd1e863a0ab708",
-                "reference": "0b7f4f2384006c78dc20daaf53dd1e863a0ab708",
+                "url": "https://api.github.com/repos/pestphp/pest/zipball/eaeb133c77f3f5382620f0307c3b45b34961bcfc",
+                "reference": "eaeb133c77f3f5382620f0307c3b45b34961bcfc",
                 "shasum": ""
             },
             "require": {
@@ -1189,7 +1189,7 @@
             ],
             "support": {
                 "issues": "https://github.com/pestphp/pest/issues",
-                "source": "https://github.com/pestphp/pest/tree/3.x"
+                "source": "https://github.com/pestphp/pest/tree/v3.5.0"
             },
             "funding": [
                 {
@@ -1201,7 +1201,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2024-10-20T11:48:07+00:00"
+            "time": "2024-10-22T14:33:27+00:00"
         },
         {
             "name": "pestphp/pest-plugin",
@@ -1909,12 +1909,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/phpstan/phpstan.git",
-                "reference": "4b3406ee35b006a616bfea6be9498977c310668e"
+                "reference": "d871b7a411b61809fa7e8404b31175624718010f"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/phpstan/phpstan/zipball/4b3406ee35b006a616bfea6be9498977c310668e",
-                "reference": "4b3406ee35b006a616bfea6be9498977c310668e",
+                "url": "https://api.github.com/repos/phpstan/phpstan/zipball/d871b7a411b61809fa7e8404b31175624718010f",
+                "reference": "d871b7a411b61809fa7e8404b31175624718010f",
                 "shasum": ""
             },
             "require": {
@@ -1960,7 +1960,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2024-10-22T07:44:31+00:00"
+            "time": "2024-10-23T14:24:05+00:00"
         },
         {
             "name": "phpunit/php-code-coverage",
@@ -4078,12 +4078,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/console.git",
-                "reference": "8f6d3ecb5ae72d1f21af58fc7ec50a4d9e4273e4"
+                "reference": "de74db6d7c9f4ecabf7b4a1a20655e021b034001"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/console/zipball/8f6d3ecb5ae72d1f21af58fc7ec50a4d9e4273e4",
-                "reference": "8f6d3ecb5ae72d1f21af58fc7ec50a4d9e4273e4",
+                "url": "https://api.github.com/repos/symfony/console/zipball/de74db6d7c9f4ecabf7b4a1a20655e021b034001",
+                "reference": "de74db6d7c9f4ecabf7b4a1a20655e021b034001",
                 "shasum": ""
             },
             "require": {
@@ -4163,7 +4163,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2024-10-14T18:16:08+00:00"
+            "time": "2024-10-23T06:56:12+00:00"
         },
         {
             "name": "symfony/deprecation-contracts",
@@ -4462,12 +4462,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/finder.git",
-                "reference": "b98a9af917cf81ec03cfec4824216fe5f3ed3fcc"
+                "reference": "6de263e5868b9a137602dd1e33e4d48bfae99c49"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/finder/zipball/b98a9af917cf81ec03cfec4824216fe5f3ed3fcc",
-                "reference": "b98a9af917cf81ec03cfec4824216fe5f3ed3fcc",
+                "url": "https://api.github.com/repos/symfony/finder/zipball/6de263e5868b9a137602dd1e33e4d48bfae99c49",
+                "reference": "6de263e5868b9a137602dd1e33e4d48bfae99c49",
                 "shasum": ""
             },
             "require": {
@@ -4518,7 +4518,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2024-10-01T08:32:35+00:00"
+            "time": "2024-10-23T06:56:12+00:00"
         },
         {
             "name": "symfony/options-resolver",
@@ -5357,12 +5357,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/string.git",
-                "reference": "ae7e10614254ed62daa0774bb3045550d4ca96ec"
+                "reference": "205580699b4d3e11f7b679faf2c0f57ffca6981c"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/string/zipball/ae7e10614254ed62daa0774bb3045550d4ca96ec",
-                "reference": "ae7e10614254ed62daa0774bb3045550d4ca96ec",
+                "url": "https://api.github.com/repos/symfony/string/zipball/205580699b4d3e11f7b679faf2c0f57ffca6981c",
+                "reference": "205580699b4d3e11f7b679faf2c0f57ffca6981c",
                 "shasum": ""
             },
             "require": {
@@ -5436,7 +5436,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2024-09-30T20:57:26+00:00"
+            "time": "2024-10-23T06:56:12+00:00"
         },
         {
             "name": "szepeviktor/phpstan-wordpress",
@@ -5681,7 +5681,7 @@
     },
     "prefer-stable": false,
     "prefer-lowest": false,
-    "platform": [],
-    "platform-dev": [],
+    "platform": {},
+    "platform-dev": {},
     "plugin-api-version": "2.6.0"
 }

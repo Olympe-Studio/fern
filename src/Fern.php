@@ -7,6 +7,7 @@ namespace Fern\Core;
 use Fern\Core\CLI\FernCLI;
 use Fern\Core\Errors\FernConfigurationExceptions;
 use Fern\Core\Factory\Singleton;
+use Fern\Core\Services\Gutenberg\Gutenberg;
 use Fern\Core\Services\I18N\I18N;
 use Fern\Core\Services\Mailer\Mailer;
 use Fern\Core\Services\Router\Router;
@@ -85,7 +86,7 @@ class Fern extends Singleton {
       Mailer::boot();
       Wordpress::boot();
       Images::boot();
-
+      Gutenberg::boot();
       // Finally, boot the router last.
       Router::boot();
     }

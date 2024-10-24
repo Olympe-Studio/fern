@@ -18,5 +18,5 @@ interface Controller {
    *
    * @return static The class classed as a unique instance.
    */
-  public static function getInstance(array ...$args): static ;
+  public static function getInstance(array ...$args): static;
 }
