@@ -57,6 +57,13 @@ class Views {
     }
 
     $result = $engine->render($template, $data);
+    /**
+     * Allow result modification for views
+     *
+     * @param string $result
+     *
+     * @return string
+     */
     $result = Filters::apply('fern:core:views:result', $result);
     Events::trigger('qm/stop', 'fern:render_view');
 

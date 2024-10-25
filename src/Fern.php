@@ -56,6 +56,11 @@ class Fern extends Singleton {
    * @param array<string, ConfigValue> $config
    */
   public static function defineConfig(array $config): void {
+    /**
+     * Trigger before Fern boot.
+     *
+     * Tipically used to define controllers from within a library
+     */
     Events::trigger('fern:core:before_boot');
     Events::trigger('qm/start', 'fern:boot');
 
@@ -63,6 +68,11 @@ class Fern extends Singleton {
     self::boot();
 
     Events::trigger('qm/stop', 'fern:boot');
+    /**
+     * Trigger when Fern is booted.
+     *
+     * Tipically used to define extra services that needs Fern services.
+     */
     Events::trigger('fern:core:after_boot');
 
     /** @phpstan-ignore-next-line */
