@@ -359,7 +359,9 @@ class Router extends Singleton {
       || $this->request->isAutoSave()
       || $this->request->isCRON()
       || $this->request->isREST()
-      || ($this->request->isAjax() && !$this->request->isAction());
+      || ($this->request->isAjax() && !$this->request->isAction())
+      || is_null(get_queried_object())
+    ;
   }
 
   /**
