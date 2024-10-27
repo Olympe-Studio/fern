@@ -21,7 +21,7 @@ abstract class Singleton {
   /**
    * Prevent instance unserialization
    */
-  final public function __wakeup() {
+  final public function __wakeup(): void {
     // Private wakeup method to prevent unserializing of the instance
   }
 

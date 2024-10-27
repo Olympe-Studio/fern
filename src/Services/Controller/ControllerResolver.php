@@ -32,7 +32,7 @@ class ControllerResolver extends Singleton {
   /** @var string Constant for 404 type controller */
   private const TYPE_404 = '_404';
 
-    /** @var ControllerRegistry */
+  /** @var ControllerRegistry */
   private array $controllers;
 
   public function __construct() {
@@ -202,7 +202,7 @@ class ControllerResolver extends Singleton {
     $config['menu_slug'] = $handle;
 
     // Override the callback with the controller's handle
-    $callback = function () use ($controllerClass) {
+    $callback = function () use ($controllerClass): void {
       $controller = $controllerClass::getInstance();
       $reply = $controller->handle(Request::getCurrent());
       $reply->send();

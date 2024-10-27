@@ -81,7 +81,7 @@ class Router extends Singleton {
     ControllerResolver::boot();
     $req = Request::getCurrent();
 
-    Filters::add(['template_include', 'admin_'], static function () {
+    Filters::add(['template_include', 'admin_'], static function (): void {
       $router = Router::getInstance();
       $router->resolve();
     }, 99, 1);
@@ -89,7 +89,7 @@ class Router extends Singleton {
     if ($req->isAction()) {
       AttributesManager::boot();
 
-      Filters::add('admin_init', static function () {
+      Filters::add('admin_init', static function (): void {
         $router = Router::getInstance();
         $router->resolveAdminActions();
       }, 99, 1);
@@ -332,7 +332,7 @@ class Router extends Singleton {
    * @param string $methodName The method name to check
    */
   private function isReservedOrMagicMethod(string $methodName): bool {
-    return in_array($methodName, self::RESERVED_ACTIONS, true) || strpos($methodName, '_') === 0;
+    return in_array($methodName, self::RESERVED_ACTIONS, true) || str_starts_with($methodName, '_')  ;
   }
 
   /**

@@ -340,11 +340,11 @@ class File {
    */
   public function toArray(): array {
     return [
-      'id'   => $this->id,
+      'id' => $this->id,
       'name' => $this->name,
       'type' => $this->type,
       'size' => $this->size,
-      'url'  => $this->url,
+      'url' => $this->url,
     ];
   }
 
@@ -424,14 +424,14 @@ class File {
    */
   private function getErrorMessage(): string {
     return match ($this->error) {
-      UPLOAD_ERR_INI_SIZE   => 'The uploaded file exceeds the upload_max_filesize directive',
-      UPLOAD_ERR_FORM_SIZE  => 'The uploaded file exceeds the MAX_FILE_SIZE directive',
-      UPLOAD_ERR_PARTIAL    => 'The uploaded file was only partially uploaded',
-      UPLOAD_ERR_NO_FILE    => 'No file was uploaded',
+      UPLOAD_ERR_INI_SIZE => 'The uploaded file exceeds the upload_max_filesize directive',
+      UPLOAD_ERR_FORM_SIZE => 'The uploaded file exceeds the MAX_FILE_SIZE directive',
+      UPLOAD_ERR_PARTIAL => 'The uploaded file was only partially uploaded',
+      UPLOAD_ERR_NO_FILE => 'No file was uploaded',
       UPLOAD_ERR_NO_TMP_DIR => 'Missing a temporary folder',
       UPLOAD_ERR_CANT_WRITE => 'Failed to write file to disk',
-      UPLOAD_ERR_EXTENSION  => 'File upload stopped by extension',
-      default               => 'Unknown upload error'
+      UPLOAD_ERR_EXTENSION => 'File upload stopped by extension',
+      default => 'Unknown upload error'
     };
   }
 

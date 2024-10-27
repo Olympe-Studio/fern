@@ -87,12 +87,8 @@ class Mailer extends Singleton {
       return $mailer;
     });
 
-    Filters::add('wp_mail_from', function () use ($config) {
-      return $config['from_address'];
-    });
+    Filters::add('wp_mail_from', fn () => $config['from_address']);
 
-    Filters::add('wp_mail_from_name', function () use ($config) {
-      return $config['from_name'];
-    });
+    Filters::add('wp_mail_from_name', fn () => $config['from_name']);
   }
 }

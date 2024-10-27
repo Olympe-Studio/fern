@@ -15,8 +15,8 @@ class CacheReply {
    * @param array<string> $varyBy Array of action parameters to vary the cache by
    */
   public function __construct(
-      public readonly int $ttl      = 3600,
-      public readonly ?string $key  = null,
+      public readonly int $ttl = 3600,
+      public readonly ?string $key = null,
       public readonly array $varyBy = [],
   ) {
   }

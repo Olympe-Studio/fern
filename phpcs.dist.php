@@ -15,6 +15,8 @@ $finder = PhpCsFixer\Finder::create()
 return (new PhpCsFixer\Config())
   ->setRules([
     // PHP 7.4+ features
+    '@PHP80Migration:risky' => true,
+    'void_return' => true,
     'declare_strict_types' => true,
     'strict_param' => true,
     'array_syntax' => ['syntax' => 'short'],
@@ -73,7 +75,15 @@ return (new PhpCsFixer\Config())
     'align_multiline_comment' => [
       'comment_type' => 'phpdocs_only'
     ],
-
+    'binary_operator_spaces' => [
+      'default' => 'single_space',
+    ],
+    'concat_space' => [
+      'spacing' => 'one',
+    ],
+    'cast_spaces' => [
+      'space' => 'single',
+    ],
     // Braces and Operators
     'operator_linebreak' => [
       'only_booleans' => true,
@@ -88,6 +98,8 @@ return (new PhpCsFixer\Config())
       'allow_mixed' => true,
       'remove_inheritdoc' => false,
     ],
+    'phpdoc_to_comment' => false, // Allow PHPDoc for variables
+    'phpdoc_indent' => true,
 
     // Code Style
     'single_quote' => true,

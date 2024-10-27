@@ -137,7 +137,7 @@ PHP . PHP_EOL;
     return self::getFilesRecursively($appPath, function ($fileInfo) {
       return $fileInfo->isFile()
         && $fileInfo->getExtension() === 'php'
-        && strpos($fileInfo->getFilename(), '_') === 0;
+        && str_starts_with($fileInfo->getFilename(), '_')  ;
     });
   }
 }

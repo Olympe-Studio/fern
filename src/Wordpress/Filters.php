@@ -14,10 +14,8 @@ class Filters {
    * @param callable        $callback     The callback
    * @param int             $priority     The callback priority. The higher the number, the latter the event will be triggered.
    * @param int             $acceptedArgs The number of arguments the function accept (by default Heracles will reflect it from the passed callback).
-   *
-   * @return void
    */
-  public static function add(string|array $filters, $callback, int $priority = 10, int $acceptedArgs = -1) {
+  public static function add(string|array $filters, $callback, int $priority = 10, int $acceptedArgs = -1): void {
     self::_add('add_filter', $filters, $callback, $priority, $acceptedArgs);
   }
 
@@ -38,10 +36,8 @@ class Filters {
    * Remove a filter handler from the filter named. Alternative of remove_filter
    *
    * @param string|string[] $filterName The name of the filter to remove the callback from.
-   *
-   * @return void
    */
-  public static function removeHandlers(string|array $filterName) {
+  public static function removeHandlers(string|array $filterName): void {
     if (is_string($filterName)) {
       $filterName = [$filterName];
     }

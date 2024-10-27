@@ -354,7 +354,7 @@ class Cache extends Singleton {
         if (function_exists('hash')) {
           $depsKey = hash('xxh32', serialize($dependencies));
         } else {
-          $depsKey = (string)crc32(serialize($dependencies));
+          $depsKey = (string) crc32(serialize($dependencies));
         }
       } catch (Exception $e) {
         throw new InvalidArgumentException(
@@ -366,7 +366,7 @@ class Cache extends Singleton {
         return 'memo_' . hash('xxh32', $callbackKey . '_' . $depsKey);
       }
 
-      return 'memo_' . (string)crc32($callbackKey . '_' . $depsKey);
+      return 'memo_' . (string) crc32($callbackKey . '_' . $depsKey);
     } catch (Exception $e) {
       throw new InvalidArgumentException(
           'Failed to generate memo key: ' . $e->getMessage(),

@@ -86,7 +86,7 @@ class AttributesManager extends Singleton {
         throw new AttributeValidationException(
             sprintf(
                 'Validation failed for method %s::%s - %s',
-                get_class($controller),
+                $controller::class,
                 $methodName,
                 implode(', ', $errors),
             ),
@@ -98,7 +98,7 @@ class AttributesManager extends Singleton {
       throw new AttributeValidationException(
           sprintf(
               'Failed to validate method %s::%s - %s',
-              get_class($controller),
+              $controller::class,
               $methodName,
               $e->getMessage(),
           ),

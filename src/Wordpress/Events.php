@@ -14,10 +14,8 @@ class Events {
    * @param callable        $callback     The callback
    * @param int             $priority     The callback priority.
    * @param int             $acceptedArgs The number of arguments the function accept (by default Heracles will reflect it from the passed callback).
-   *
-   * @return void
    */
-  public static function addHandlers(string|array $eventName, $callback, int $priority = 10, int $acceptedArgs = -1) {
+  public static function addHandlers(string|array $eventName, $callback, int $priority = 10, int $acceptedArgs = -1): void {
     self::_add('add_action', $eventName, $callback, $priority, $acceptedArgs);
   }
 
@@ -51,10 +49,8 @@ class Events {
    * Remove an event handler from the event named. Alternative of remove_action
    *
    * @param string|array<string> $eventName The name of the event to remove the callback from.
-   *
-   * @return void
    */
-  public static function removeHandlers(string|array $eventName) {
+  public static function removeHandlers(string|array $eventName): void {
     if (is_string($eventName)) {
       $eventName = [$eventName];
     }

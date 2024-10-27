@@ -120,7 +120,7 @@ class Gutenberg extends Singleton {
     if (substr($pattern, -2) === '/*') {
       $namespace = substr($pattern, 0, -2);
 
-      return strpos($blockName, $namespace) === 0;
+      return str_starts_with($blockName, $namespace)  ;
     }
 
     return $pattern === $blockName;
