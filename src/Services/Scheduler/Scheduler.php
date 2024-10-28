@@ -52,7 +52,7 @@ class Scheduler extends Singleton {
     /**
      * Add the schedule to the cron schedules.
      */
-    Filters::add('cron_schedules', function ($schedules) use ($str, $schedule) {
+    Filters::on('cron_schedules', function ($schedules) use ($str, $schedule) {
       $schedules[$str] = $schedule;
 
       return $schedules;
@@ -86,7 +86,7 @@ class Scheduler extends Singleton {
       wp_schedule_event($startAt, $interval, $taskName, $args);
     }
 
-    Events::addHandlers($taskName, $callback, 10, 1);
+    Events::on($taskName, $callback, 10, 1);
     $task = new Task($taskName, $interval, $callback, $args, $startAt);
     self::$tasks[$taskName] = $task;
 

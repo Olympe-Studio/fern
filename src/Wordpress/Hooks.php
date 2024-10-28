@@ -6,7 +6,7 @@ namespace Fern\Core\Wordpress;
 
 use Fern\Core\Utils\Utils;
 
-trait Hooks {
+abstract class Hooks {
   /**
    * Add an event handler to the event named. Alternative of add_action
    *

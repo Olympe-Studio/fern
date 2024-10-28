@@ -108,7 +108,7 @@ class Fern extends Singleton {
    * Boot the theme support
    */
   private static function bootThemeSupport(): void {
-    Events::addHandlers('after_setup_theme', static function (): void {
+    Events::on('after_setup_theme', static function (): void {
       $theme = Config::get('theme', []);
       $themeSupport = $theme['support'] ?? [];
       $menus = $theme['menus'] ?? [];

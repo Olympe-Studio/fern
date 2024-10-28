@@ -30,11 +30,11 @@ class Wordpress {
     $config = Config::get('core.excerpt');
 
     if (isset($config['length'])) {
-      Filters::add('excerpt_length', fn () => $config['length']);
+      Filters::on('excerpt_length', fn () => $config['length']);
     }
 
     if (isset($config['more'])) {
-      Filters::add('excerpt_more', fn () => $config['more']);
+      Filters::on('excerpt_more', fn () => $config['more']);
     }
   }
 
@@ -45,7 +45,7 @@ class Wordpress {
     $config = Config::get('core.upload_mimes');
 
     if (!empty($config)) {
-      Filters::add('upload_mimes', function (array $mimes) use ($config) {
+      Filters::on('upload_mimes', function (array $mimes) use ($config) {
         foreach ($config as $extension => $mime_type) {
           if ($mime_type === false) {
             unset($mimes[$extension]);
@@ -66,7 +66,7 @@ class Wordpress {
     $config = Config::get('core.dashboard_widgets');
 
     if (isset($config['disable']) && !empty($config['disable'])) {
-      Events::addHandlers('wp_dashboard_setup', function () use ($config): void {
+      Events::on('wp_dashboard_setup', function () use ($config): void {
         foreach ($config['disable'] as $widget => $isDisabled) {
           if ($isDisabled === true) {
             self::removeDashboardWidget($widget);
@@ -106,7 +106,7 @@ class Wordpress {
     $config = Config::get('core.admin_menu');
 
     if (isset($config['disable']) && is_array($config['disable'])) {
-      Events::addHandlers('admin_init', function () use ($config): void {
+      Events::on('admin_init', function () use ($config): void {
         foreach ($config['disable'] as $item => $shouldRemove) {
           if ($shouldRemove === true) {
             switch ($item) {
@@ -148,7 +148,7 @@ class Wordpress {
     $config = Config::get('core.admin_toolbar');
 
     if (isset($config['disable']) && is_array($config['disable'])) {
-      Events::addHandlers('admin_bar_menu', function (WP_Admin_Bar $menu) use ($config): void {
+      Events::on('admin_bar_menu', function (WP_Admin_Bar $menu) use ($config): void {
         foreach ($config['disable'] as $item => $shouldRemove) {
           if ($shouldRemove === true) {
             $menu->remove_node($item);

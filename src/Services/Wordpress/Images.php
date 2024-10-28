@@ -197,7 +197,7 @@ class Images {
     $settings = $this->config;
 
     // Always set JPEG quality
-    Filters::add('jpeg_quality', [$this, 'setJpegQuality']);
+    Filters::on('jpeg_quality', [$this, 'setJpegQuality']);
 
     if ($settings['disabled']) {
       $this->disableImageProcessing();
@@ -208,33 +208,33 @@ class Images {
     $settings = $settings['settings'];
 
     if ($settings['disable_image_sizes']) {
-      Filters::add('intermediate_image_sizes_advanced', [$this, 'disableImageSizes']);
-      Filters::add('big_image_size_threshold', '__return_false');
+      Filters::on('intermediate_image_sizes_advanced', [$this, 'disableImageSizes']);
+      Filters::on('big_image_size_threshold', '__return_false');
     }
 
     if ($settings['disable_other_image_sizes']) {
-      Events::addHandlers('init', [$this, 'disableOtherImageSizes']);
+      Events::on('init', [$this, 'disableOtherImageSizes']);
     }
 
     if ($settings['disable_image_editing']) {
-      Filters::add('wp_image_editors', [$this, 'disableImageEditing']);
+      Filters::on('wp_image_editors', [$this, 'disableImageEditing']);
     }
 
     if ($settings['remove_default_image_sizes']) {
-      Filters::add('intermediate_image_sizes_advanced', [$this, 'removeDefaultImageSizes']);
+      Filters::on('intermediate_image_sizes_advanced', [$this, 'removeDefaultImageSizes']);
     }
 
     if ($settings['disable_responsive_images']) {
-      Filters::add('max_srcset_image_width', [$this, 'disableResponsiveImages']);
+      Filters::on('max_srcset_image_width', [$this, 'disableResponsiveImages']);
     }
 
     if ($settings['prevent_image_resizes_on_upload']) {
-      Filters::add('wp_generate_attachment_metadata', [$this, 'preventImageResizesOnUpload'], 10, 1);
+      Filters::on('wp_generate_attachment_metadata', [$this, 'preventImageResizesOnUpload'], 10, 1);
     }
 
     if (!empty($settings['custom_sizes'])) {
-      Events::addHandlers('after_setup_theme', [$this, 'addCustomImageSizes']);
-      Filters::add('image_size_names_choose', [$this, 'addCustomImageSizesToEditor']);
+      Events::on('after_setup_theme', [$this, 'addCustomImageSizes']);
+      Filters::on('image_size_names_choose', [$this, 'addCustomImageSizesToEditor']);
     }
   }
 
@@ -325,14 +325,14 @@ class Images {
    * This method adds filters to disable different aspects of WordPress image processing.
    */
   protected function disableImageProcessing(): void {
-    Filters::add('intermediate_image_sizes_advanced', [$this, 'disableImageSizes']);
-    Filters::add('big_image_size_threshold', '__return_false');
-    Filters::add('init', [$this, 'disableOtherImageSizes']);
-    Filters::add('wp_image_editors', [$this, 'disableImageEditing']);
-    Filters::add('intermediate_image_sizes_advanced', [$this, 'removeDefaultImageSizes']);
-    Filters::add('jpeg_quality', [$this, 'setJpegQuality']);
-    Filters::add('max_srcset_image_width', [$this, 'disableResponsiveImages']);
-    Filters::add('wp_generate_attachment_metadata', [$this, 'preventImageResizesOnUpload'], 10, 2);
+    Filters::on('intermediate_image_sizes_advanced', [$this, 'disableImageSizes']);
+    Filters::on('big_image_size_threshold', '__return_false');
+    Filters::on('init', [$this, 'disableOtherImageSizes']);
+    Filters::on('wp_image_editors', [$this, 'disableImageEditing']);
+    Filters::on('intermediate_image_sizes_advanced', [$this, 'removeDefaultImageSizes']);
+    Filters::on('jpeg_quality', [$this, 'setJpegQuality']);
+    Filters::on('max_srcset_image_width', [$this, 'disableResponsiveImages']);
+    Filters::on('wp_generate_attachment_metadata', [$this, 'preventImageResizesOnUpload'], 10, 2);
   }
 
   /**
@@ -342,8 +342,8 @@ class Images {
    */
   protected function setupCustomImageSizes(): void {
     if (!empty($this->config['settings']['custom_sizes'])) {
-      Events::addHandlers('after_setup_theme', [$this, 'addCustomImageSizes']);
-      Filters::add('image_size_names_choose', [$this, 'addCustomImageSizesToEditor']);
+      Events::on('after_setup_theme', [$this, 'addCustomImageSizes']);
+      Filters::on('image_size_names_choose', [$this, 'addCustomImageSizesToEditor']);
     }
   }
 }

@@ -42,8 +42,8 @@ class Gutenberg extends Singleton {
     $req = Request::getInstance();
 
     if ($req->isAdmin()) {
-      Filters::add('use_block_editor_for_post_type', [$instance, 'explicitlyShowOnPostTypes'], 10, 2);
-      Filters::add('allowed_block_types_all', [$instance, 'filterAllowedBlocks'], 2, 1);
+      Filters::on('use_block_editor_for_post_type', [$instance, 'explicitlyShowOnPostTypes'], 10, 2);
+      Filters::on('allowed_block_types_all', [$instance, 'filterAllowedBlocks'], 2, 1);
     }
   }
 

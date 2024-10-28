@@ -270,11 +270,11 @@ class File {
         return $uploads;
       };
 
-      Filters::add('upload_dir', $uploadDirFilter, 50, 1);
+      Filters::on('upload_dir', $uploadDirFilter, 50, 1);
     }
 
     try {
-      Filters::add('upload_dir', [$this, 'validateUploadDir'], 20);
+      Filters::on('upload_dir', [$this, 'validateUploadDir'], 20);
       $upload = wp_handle_upload($uploadData, [
         'test_form' => false,
         'action' => 'local',

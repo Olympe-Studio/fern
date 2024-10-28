@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace Fern\Core\Wordpress;
 
-class Filters {
-  use Hooks;
+class Filters extends Hooks {
 
   /**
    * Create a new filter function Alternative of add_filter
@@ -17,6 +16,18 @@ class Filters {
    */
   public static function add(string|array $filters, $callback, int $priority = 10, int $acceptedArgs = -1): void {
     self::_add('add_filter', $filters, $callback, $priority, $acceptedArgs);
+  }
+
+  /**
+   * Alias of add
+   *
+   * @param string|string[] $filters      The name of the filter to hook the callback to.
+   * @param callable        $callback     The callback
+   * @param int             $priority     The callback priority. The higher the number, the latter the event will be triggered.
+   * @param int             $acceptedArgs The number of arguments the function accept (by default Heracles will reflect it from the passed callback).
+   */
+  public static function on(string|array $eventName, $callback, int $priority = 10, int $acceptedArgs = -1): void {
+    self::add($eventName, $callback, $priority, $acceptedArgs);
   }
 
   /**

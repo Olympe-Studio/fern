@@ -45,7 +45,7 @@ class Cache extends Singleton {
     $this->persistentCache = [];
     $this->init();
 
-    Events::addHandlers('shutdown', [$this, 'save']);
+    Events::on('shutdown', [$this, 'save']);
   }
 
   /**

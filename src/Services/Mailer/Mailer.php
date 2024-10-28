@@ -72,7 +72,7 @@ class Mailer extends Singleton {
 
     $instance->validateConfig();
 
-    Events::addHandlers('phpmailer_init', function (PHPMailer $mailer) use ($config) {
+    Events::on('phpmailer_init', function (PHPMailer $mailer) use ($config) {
       $mailer->isSMTP();
       $mailer->SMTPAutoTLS = false;
       $mailer->SMTPAuth = !empty($config['username']) && !empty($config['password']);
@@ -87,8 +87,8 @@ class Mailer extends Singleton {
       return $mailer;
     });
 
-    Filters::add('wp_mail_from', fn () => $config['from_address']);
+    Filters::on('wp_mail_from', fn () => $config['from_address']);
 
-    Filters::add('wp_mail_from_name', fn () => $config['from_name']);
+    Filters::on('wp_mail_from_name', fn () => $config['from_name']);
   }
 }

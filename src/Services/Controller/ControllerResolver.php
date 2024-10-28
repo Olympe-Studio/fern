@@ -55,7 +55,7 @@ class ControllerResolver extends Singleton {
       $instance->processClass($className);
     }
 
-    Events::addHandlers('admin_menu', [$instance, 'registerAdminMenus'], 10, 0);
+    Events::on('admin_menu', [$instance, 'registerAdminMenus'], 10, 0);
   }
 
   /**
