@@ -29,7 +29,7 @@ class I18N {
     $domain = $config['domain'] ?? self::DEFAULT_DOMAIN;
 
     if (!is_dir($path) || !is_readable($path)) {
-      throw new RuntimeException("Languages directory not accessible: {$path}");
+      wp_mkdir_p($path);
     }
 
     self::loadTextDomain($path, $domain);
