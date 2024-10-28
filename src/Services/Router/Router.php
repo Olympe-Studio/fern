@@ -360,7 +360,7 @@ class Router extends Singleton {
       || $this->request->isCRON()
       || $this->request->isREST()
       || ($this->request->isAjax() && !$this->request->isAction())
-      || is_null(get_queried_object())
+      || (is_null(get_queried_object()) && !$this->request->isAction() && !$this->request->is404());
     ;
   }
 
