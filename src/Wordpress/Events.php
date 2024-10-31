@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Fern\Core\Wordpress;
 
 class Events extends Hooks {
-
   /**
    * Add an event handler to the event named. Alternative of add_action
    *
