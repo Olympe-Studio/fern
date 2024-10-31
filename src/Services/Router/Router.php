@@ -341,10 +341,16 @@ class Router extends Singleton {
    * @param string $controller The controller to handle the request
    */
   private function handleGetRequest(string $controller): void {
+    Events::trigger('qm/start', 'fern:make_all_queries');
     $reply = $controller::getInstance()->handle($this->request);
 
     if ($reply instanceof Reply) {
       $reply->send();
+    }
+
+    $req = $this->request;
+    if ($req->is404()) {
+      $this->handle404();
     } else {
       throw new RouterException('Controller handle method must return a Reply object ready to be sent.');
     }
@@ -373,7 +379,6 @@ class Router extends Singleton {
     }
 
     $disabled = $this->getConfig()['disable'] ?? [];
-
     return $this->request->is404()
       // Always return 404 for attachments as it should never create pages beside the media URL.
       || $this->request->isAttachment()
