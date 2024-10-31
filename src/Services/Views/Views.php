@@ -23,7 +23,6 @@ class Views {
    * @throws InvalidArgumentException
    */
   public static function render(string $template, array $data = []): string {
-    Events::trigger('qm/start', 'fern:render_view');
     $engine = self::getEngine();
 
     if (isset($data['ctx'])) {
@@ -51,12 +50,17 @@ class Views {
      * @return array
      */
     $data = Filters::apply('fern:core:views:data', $data);
+    Events::trigger('qm/stop', 'fern:make_all_queries');
 
     if (!is_array($data)) {
       throw new InvalidArgumentException('Invalid data. Views data must be an array, received: ' . gettype($data) . '.');
     }
 
+    Events::trigger('qm/start', 'fern:render_view');
+    Events::trigger('qm/start', 'fern:render_raw');
     $result = $engine->render($template, $data);
+    Events::trigger('qm/stop', 'fern:render_raw');
+
     /**
      * Allow result modification for views
      *
