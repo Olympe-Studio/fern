@@ -117,6 +117,60 @@ trait WooCartActions {
   }
 
   /**
+   * Apply a coupon to the cart
+   */
+  public function applyCoupon(Request $request): Reply {
+    $action = $request->getAction();
+    $coupon = $action->get('coupon');
+
+    $appliedCoupons = $this->getCart()->get_applied_coupons();
+
+    if (in_array($coupon, $appliedCoupons)) {
+      return new Reply(400, [
+        'success' => false,
+        'message' => Woocommerce::getText('errors.already_applied'),
+      ]);
+    }
+
+    $success = $this->getCart()->apply_coupon($coupon);
+
+    if (!$success) {
+      return new Reply(400, [
+        'success' => false,
+        'message' => Woocommerce::getText('errors.invalid_coupon'),
+      ]);
+    }
+
+    return new Reply(200, [
+      'success' => true,
+      'message' => Woocommerce::getText('success.coupon_applied'),
+      'cart' => $this->formatCartData(),
+    ]);
+  }
+
+  /**
+   * Remove a coupon from the cart
+   */
+  public function removeCoupon(Request $request): Reply {
+    $action = $request->getAction();
+    $coupon = $action->get('coupon');
+    $removed = $this->getCart()->remove_coupon($coupon);
+
+    if (!$removed) {
+      return new Reply(400, [
+        'success' => false,
+        'message' => Woocommerce::getText('errors.removing_coupon'),
+      ]);
+    }
+
+    return new Reply(200, [
+      'success' => true,
+      'message' => Woocommerce::getText('success.coupon_removed'),
+      'cart' => $this->formatCartData(),
+    ]);
+  }
+
+  /**
    * Remove an item from cart
    */
   public function removeFromCart(Request $request): Reply {
@@ -288,6 +342,9 @@ trait WooCartActions {
    */
   private function formatCartData(): array {
     $cart = $this->getCart();
+    $cart->calculate_shipping();
+    $cart->calculate_fees();
+
     $cart->calculate_totals();
     $items = [];
 
