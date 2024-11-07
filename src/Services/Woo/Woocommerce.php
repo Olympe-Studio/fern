@@ -122,6 +122,10 @@ class Woocommerce {
         'item_restored'      => __('Item restored.', 'woocommerce'),
         'coupon_applied'     => __('Coupon code applied successfully.', 'woocommerce'),
         'coupon_removed'     => __('Coupon removed successfully.', 'woocommerce'),
+        'total'              => __('Total', 'woocommerce'),
+        'subtotal'          => __('Subtotal', 'woocommerce'),
+        'shipping_total'     => __('Shipping', 'woocommerce'),
+        'tax_total'          => __('Tax', 'woocommerce'),
       ],
       'checkout' => [
         'page_title'         => __('Checkout', 'woocommerce'),

@@ -340,66 +340,85 @@ trait WooCartActions {
    *
    * @return array<string, mixed>
    */
-  private function formatCartData(): array {
+  protected function formatCartData(): array {
     $cart = $this->getCart();
     $cart->calculate_shipping();
     $cart->calculate_fees();
 
     $cart->calculate_totals();
-    $items = [];
 
-    foreach ($cart->get_cart() as $cart_item_key => $cart_item) {
-      $product = $cart_item['data'];
-      $parent_product = wc_get_product($cart_item['product_id']);
+    return [
+      'items' => array_map(function ($cart_item_key, $cart_item) {
+        $product = $cart_item['data'];
+        $parent_product = wc_get_product($cart_item['product_id']);
 
-      $item = [
-        'key' => $cart_item_key,
-        'product_id' => $cart_item['product_id'],
-        'variation_id' => $cart_item['variation_id'],
-        'id' => $product->get_id(),
-        'name' => $product->get_title(),
-        'variation' => $cart_item['variation'],
-        'price' => Utils::formatPrice($product->get_price()),
-        'quantity' => $cart_item['quantity'],
-        'subtotal' => Utils::formatPrice($cart_item['line_subtotal']),
-        'total' => Utils::formatPrice($cart_item['line_total']),
-        'image' => wp_get_attachment_image_url($product->get_image_id(), 'thumbnail'),
-      ];
+        $regular_price = (float) $product->get_regular_price();
+        $sale_price = (float) $product->get_sale_price();
+        $sale_amount = $product->is_on_sale() && $regular_price > 0
+          ? round((($regular_price - $sale_price) / $regular_price) * 100)
+          : null;
 
-      // Add variation data for variable products
-      if ($parent_product && $parent_product->is_type('variable')) {
-        /** @var WC_Product_Variable $parent_product */
-        $attributes = [];
-        $variation_attributes = $parent_product->get_variation_attributes();
+        $item = [
+          'key' => $cart_item_key,
+          'product_id' => $cart_item['product_id'],
+          'variation_id' => $cart_item['variation_id'],
+          'id' => $product->get_id(),
+          'name' => $product->get_title(),
+          'variation' => $cart_item['variation'],
+          'short_description' => $product->get_short_description('edit'),
+          'quantity' => $cart_item['quantity'],
+          'price' => [
+            'regular_price' => Utils::formatPrice($regular_price),
+            'sale_price' => $product->get_sale_price() ? Utils::formatPrice($sale_price) : null,
+            'price' => Utils::formatPrice($product->get_price()),
+            'sale_amount' => $sale_amount,
+            'is_on_sale' => $product->is_on_sale(),
+            'currency' => get_woocommerce_currency(),
+          ],
+          'subtotal' => Utils::formatPrice($cart_item['line_subtotal']),
+          'total' => Utils::formatPrice($cart_item['line_total']),
+          'image' => wp_get_attachment_image_url($product->get_image_id(), 'thumbnail'),
+        ];
 
-        foreach ($variation_attributes as $attribute_name => $options) {
-          $taxonomy = str_replace('pa_', '', $attribute_name);
-          $attributes[$taxonomy] = [
-            'name' => wc_attribute_label($attribute_name),
-            'options' => array_map('strtolower', $options)
+        if ($parent_product && $parent_product->is_type('variable')) {
+          /** @var WC_Product_Variable $parent_product */
+          $item['productData'] = [
+            'variations' => array_map(
+              fn($variation) => [
+                'id' => $variation['variation_id'],
+                'attributes' => $variation['attributes'],
+                'price' => [
+                  'regular_price' => Utils::formatPrice($variation['regular_price']),
+                  'sale_price' => isset($variation['sale_price']) ? Utils::formatPrice($variation['sale_price']) : null,
+                  'price' => Utils::formatPrice($variation['display_price']),
+                  'sale_amount' => isset($variation['sale_price']) && $variation['regular_price'] > 0
+                    ? round((($variation['regular_price'] - $variation['sale_price']) / $variation['regular_price']) * 100)
+                    : null,
+                  'is_on_sale' => isset($variation['sale_price']) && $variation['sale_price'] !== $variation['regular_price'],
+                ],
+                'min_quantity' => $variation['min_qty'],
+                'max_quantity' => $variation['max_qty'],
+                'is_in_stock' => $variation['is_in_stock']
+              ],
+              $parent_product->get_available_variations()
+            ),
+            'attributes' => array_reduce(
+              array_keys($parent_product->get_variation_attributes()),
+              function ($acc, $attribute_name) use ($parent_product) {
+                $taxonomy = str_replace('pa_', '', $attribute_name);
+                $acc[$taxonomy] = [
+                  'name' => wc_attribute_label($attribute_name),
+                  'options' => array_map('strtolower', $parent_product->get_variation_attributes()[$attribute_name])
+                ];
+                return $acc;
+              },
+              []
+            )
           ];
         }
 
-        $item['productData'] = [
-          'variations' => array_map(function ($variation) {
-            return [
-              'id' => $variation['variation_id'],
-              'attributes' => $variation['attributes'],
-              'price' => Utils::formatPrice($variation['display_price']),
-              'min_quantity' => $variation['min_qty'],
-              'max_quantity' => $variation['max_qty'],
-              'is_in_stock' => $variation['is_in_stock']
-            ];
-          }, $parent_product->get_available_variations()),
-          'attributes' => $attributes
-        ];
-      }
-
-      $items[] = $item;
-    }
-
-    return [
-      'items' => $items,
+        return $item;
+      }, array_keys($cart->get_cart()), $cart->get_cart()),
       'subtotal' => Utils::formatPrice($cart->get_subtotal()),
       'total' => Utils::formatPrice($cart->get_total('')),
       'item_count' => $cart->get_cart_contents_count(),
