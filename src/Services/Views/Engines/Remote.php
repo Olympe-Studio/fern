@@ -6,6 +6,7 @@ namespace Fern\Core\Services\Views\Engines;
 
 use Fern\Core\Services\Views\RenderingEngine;
 use Fern\Core\Utils\JSON;
+use Fern\Core\Wordpress\Filters;
 use InvalidArgumentException;
 
 /**
@@ -72,10 +73,10 @@ class Remote implements RenderingEngine {
 
     $response = wp_remote_post($url, [
       'body' => $body,
-      'timeout' => 2.5,
-      'headers' => [
+      'timeout' => Filters::apply('fern:core:views:engines:remote_timeout', 2.5),
+      'headers' => Filters::apply('fern:core:views:engines:remote_headers', [
         'Content-Type' => 'application/json',
-      ],
+      ]),
       'sslverify' => $this->sslverify,
     ]);
 
