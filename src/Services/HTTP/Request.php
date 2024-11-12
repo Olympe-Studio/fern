@@ -730,7 +730,7 @@ class Request extends Singleton {
     }
 
     // handles FormData javascript Objects.
-    if (str_contains($this->contentType, 'multipart/form-data')  ) {
+    if (str_contains($this->contentType, 'multipart/form-data')) {
       $this->setFiles($_FILES);
       $this->setBody($_POST);
 
@@ -743,13 +743,13 @@ class Request extends Singleton {
       return;
     }
 
-    if (str_contains($this->contentType, 'application/json')  ) {
+    if (str_contains($this->contentType, 'application/json')) {
       $this->body = JSON::decode($input, true) ?: $input;
 
       return;
     }
 
-    if (str_contains($this->contentType, 'application/x-www-form-urlencoded')  ) {
+    if (str_contains($this->contentType, 'application/x-www-form-urlencoded')) {
       /** @phpstan-ignore-next-line */
       parse_str($input, $this->body);
 

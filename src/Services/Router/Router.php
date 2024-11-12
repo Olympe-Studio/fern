@@ -191,6 +191,7 @@ class Router extends Singleton {
        */
       $id = Filters::apply('fern:core:router:resolve_id', (int) $id, $this->request);
 
+
       if (!is_numeric($id) || $id < 0) {
         if (!is_null($id)) {
           throw new RouterException("Invalid ID: {$id}. Must be an integer greater than or equal to 0 or null.");
@@ -312,9 +313,9 @@ class Router extends Singleton {
   private function canRunAction(string $name, object $controller): bool {
     try {
       $validation = $this->attributeManagerr->validateMethod(
-          $controller,
-          $name,
-          $this->request,
+        $controller,
+        $name,
+        $this->request,
       );
     } catch (AttributeValidationException $e) {
       // Hide the error from the user
@@ -332,7 +333,7 @@ class Router extends Singleton {
    * @param string $methodName The method name to check
    */
   private function isReservedOrMagicMethod(string $methodName): bool {
-    return in_array($methodName, self::RESERVED_ACTIONS, true) || str_starts_with($methodName, '_')  ;
+    return in_array($methodName, self::RESERVED_ACTIONS, true) || str_starts_with($methodName, '_');
   }
 
   /**
@@ -366,8 +367,7 @@ class Router extends Singleton {
       || $this->request->isCRON()
       || $this->request->isREST()
       || ($this->request->isAjax() && !$this->request->isAction())
-      || (is_null(get_queried_object()) && !$this->request->isAction() && !$this->request->is404());
-    ;
+      || (is_null(get_queried_object()) && !$this->request->isAction() && !$this->request->is404());;
   }
 
   /**
