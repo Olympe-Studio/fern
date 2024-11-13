@@ -214,6 +214,10 @@ class Woocommerce {
         'in'         => __('in', 'woocommerce'),
         'yd'         => __('yd', 'woocommerce'),
       ],
+      'taxes' => [
+        'incl' => __('Including tax', 'woocommerce'),
+        'excl' => __('Excluding tax', 'woocommerce'),
+      ],
     ];;
   }
 }
