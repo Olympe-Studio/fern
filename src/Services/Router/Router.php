@@ -19,6 +19,7 @@ use Fern\Core\Wordpress\Events;
 use Fern\Core\Wordpress\Filters;
 use ReflectionMethod;
 use Throwable;
+use WP_Post_Type;
 
 /**
  * @phpstan-type RouterConfig array{
@@ -84,7 +85,7 @@ class Router extends Singleton {
     Filters::on(['template_include', 'admin_'], static function (): void {
       $router = Router::getInstance();
       $router->resolve();
-    }, 99, 1);
+    }, 10, 1);
 
     if ($req->isAction()) {
       AttributesManager::boot();
@@ -211,6 +212,18 @@ class Router extends Singleton {
 
     $type = $this->request->isTerm() ? $this->request->getTaxonomy() : $this->request->getPostType();
 
+    /**
+     * If we are on an archive page, resolve the controller for the archive page using a page ID.
+     */
+    if ($this->request->isArchive()) {
+      $controller = $this->resolveArchivePage($type, $viewType);
+
+      if ($controller !== null) {
+        return $controller;
+      }
+    }
+
+
     // If we are on a Page unhandled, it's going to fail.
     if ($type === null || $type === 'page' && $viewType !== 'admin') {
       /** @var class-string<Controller> $defaultController */
@@ -236,6 +249,64 @@ class Router extends Singleton {
     }
 
     return null;
+  }
+
+  /**
+   * Resolve the controller for an archive page using a page ID.
+   *
+   * @param string|null $type The type to resolve the archive page for
+   * @param string|null $viewType The view type to resolve the archive page for
+   *
+   * @return string|null The controller name or null if it doesn't exists.
+   */
+  private function resolveArchivePage(?string $type, ?string $viewType): ?string {
+    $pageId = $this->getArchivePageId($type);
+
+    if ($pageId > 0) {
+      $actualViewType = $viewType ?? 'view';
+      /** @var class-string<Controller>|null $controller */
+      $controller = $this->controllerResolver->resolve($actualViewType, (string) $pageId);
+    } else {
+      $handle = "archive_{$type}";
+      /** @var class-string<Controller>|null $controller */
+      $controller = $this->controllerResolver->resolve($viewType, $handle);
+    }
+
+    return $controller;
+  }
+
+  /**
+   * Get the archive page ID
+   *
+   * @param string|null $type The type to get the archive page ID for
+   *
+   * @return int The archive page ID
+   */
+  private function getArchivePageId(?string $type): int {
+    if (function_exists('wc_get_page_id')) {
+      if (is_shop()) {
+        return wc_get_page_id('shop');
+      }
+
+      if (is_account_page()) {
+        return wc_get_page_id('myaccount');
+      }
+
+      if (is_cart()) {
+        return wc_get_page_id('cart');
+      }
+
+      if (is_checkout()) {
+        return wc_get_page_id('checkout');
+      }
+    }
+
+    if ($type === 'post') {
+      return (int) get_option('page_for_posts');
+    }
+
+    $id = Filters::apply('fern:core:router:get_archive_page_id', -1, $type);
+    return $id;
   }
 
   /**
