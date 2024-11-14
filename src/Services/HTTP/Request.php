@@ -7,6 +7,7 @@ namespace Fern\Core\Services\HTTP;
 use Fern\Core\Factory\Singleton;
 use Fern\Core\Services\Actions\Action;
 use Fern\Core\Utils\JSON;
+use Fern\Core\Wordpress\Filters;
 
 /**
  * @phpstan-type HttpMethod 'GET'|'POST'|'PUT'|'DELETE'|'PATCH'|'HEAD'|'OPTIONS'
@@ -118,26 +119,22 @@ class Request extends Singleton {
    * Gets the current request TRUE ID
    */
   public function getCurrentId(): int {
-    $queriedObject = get_queried_object();
     $id = get_the_ID();
 
-    if (!is_null($queriedObject)) {
+    if (!$id || $id <= 0) {
+      $id = get_queried_object_id();
+    }
+
+    if (!$id) {
+      $queriedObject = get_queried_object();
       $id = $queriedObject->ID ?? false;
     }
 
     if (!$id) {
-      if (!is_null($queriedObject)) {
-        $termId = $queriedObject->term_id ?? null;
-
-        if (!is_null($termId)) {
-          return apply_filters('fern:core:http:request:queried_object', $termId);
-        }
-      }
-
       return -1;
     }
 
-    return (int) $id;
+    return Filters::apply('fern:core:http:request:queried_object_id', (int) $id);
   }
 
   /**
