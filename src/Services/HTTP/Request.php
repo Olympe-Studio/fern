@@ -119,11 +119,7 @@ class Request extends Singleton {
    * Gets the current request TRUE ID
    */
   public function getCurrentId(): int {
-    $id = get_the_ID();
-
-    if (!$id || $id <= 0) {
-      $id = get_queried_object_id();
-    }
+    $id = $this->isTerm() ? get_queried_object_id() : get_the_ID();
 
     if (!$id) {
       $queriedObject = get_queried_object();
