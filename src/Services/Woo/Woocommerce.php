@@ -100,6 +100,7 @@ class Woocommerce {
         'price'              => __('Price', 'woocommerce'),
       ],
       'cart' => [
+        'add_to_cart'        => __('Add to cart', 'woocommerce'),
         'view_cart'          => __('View cart', 'woocommerce'),
         'cart'               => __('Cart', 'woocommerce'),
         'page_title'         => __('Shopping Cart', 'woocommerce'),
