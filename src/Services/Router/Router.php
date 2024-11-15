@@ -217,7 +217,6 @@ class Router extends Singleton {
      */
     if ($this->request->isArchive()) {
       $controller = $this->resolveArchivePage($type, $viewType);
-
       if ($controller !== null) {
         return $controller;
       }
@@ -283,30 +282,31 @@ class Router extends Singleton {
    * @return int The archive page ID
    */
   private function getArchivePageId(?string $type): int {
+    $id = -1;
+
     if (function_exists('wc_get_page_id')) {
       if (is_shop()) {
-        return wc_get_page_id('shop');
+        $id = wc_get_page_id('shop');
       }
 
       if (is_account_page()) {
-        return wc_get_page_id('myaccount');
+        $id = wc_get_page_id('myaccount');
       }
 
       if (is_cart()) {
-        return wc_get_page_id('cart');
+        $id = wc_get_page_id('cart');
       }
 
       if (is_checkout()) {
-        return wc_get_page_id('checkout');
+        $id = wc_get_page_id('checkout');
       }
     }
 
     if ($type === 'post') {
-      return (int) get_option('page_for_posts');
+      $id = (int) get_option('page_for_posts');
     }
 
-    $id = Filters::apply('fern:core:router:get_archive_page_id', -1, $type);
-    return $id;
+    return Filters::apply('fern:core:router:get_archive_page_id', $id, $type);
   }
 
   /**
