@@ -30,11 +30,11 @@ class Wordpress {
     $config = Config::get('core.excerpt');
 
     if (isset($config['length'])) {
-      Filters::on('excerpt_length', fn () => $config['length']);
+      Filters::on('excerpt_length', fn() => $config['length']);
     }
 
     if (isset($config['more'])) {
-      Filters::on('excerpt_more', fn () => $config['more']);
+      Filters::on('excerpt_more', fn() => $config['more']);
     }
   }
 
@@ -67,36 +67,31 @@ class Wordpress {
 
     if (isset($config['disable']) && !empty($config['disable'])) {
       Events::on('wp_dashboard_setup', function () use ($config): void {
+        /**
+         * If disabled is not a boolean it means we want to force the context.
+         */
         foreach ($config['disable'] as $widget => $isDisabled) {
-          if ($isDisabled === true) {
-            self::removeDashboardWidget($widget);
+          if (is_bool($isDisabled) && $isDisabled === false) {
+            continue;
           }
+
+          $context = $isDisabled === true ? 'normal' : $isDisabled;
+          self::removeDashboardWidget($widget, $context);
         }
-      });
+      }, 10, 0);
     }
   }
 
   /**
    * Remove a specific dashboard widget
+   *
+   * @param string $widget
+   * @param string $context
+   *
+   * @return void
    */
-  private static function removeDashboardWidget(string $widget): void {
-    switch ($widget) {
-      case 'site_health':
-        remove_meta_box('dashboard_site_health', 'dashboard', 'normal');
-        break;
-
-      case 'activity':
-        remove_meta_box('dashboard_activity', 'dashboard', 'normal');
-        break;
-
-      case 'quick_press':
-        remove_meta_box('dashboard_quick_press', 'dashboard', 'side');
-        break;
-
-      case 'primary':
-        remove_meta_box('dashboard_primary', 'dashboard', 'side');
-        break;
-    }
+  private static function removeDashboardWidget(string $widget, string $context = 'normal'): void {
+    remove_meta_box($widget, 'dashboard', $context);
   }
 
   /**
