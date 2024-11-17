@@ -28,7 +28,7 @@ class Utils {
         : new ReflectionFunction($callable);
     }
 
-    if (!is_array($callable)) {
+    if (!is_array($callable) || count($callable) !== 2) {
       $callable = [$callable, '__invoke'];
     }
 
