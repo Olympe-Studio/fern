@@ -9,6 +9,7 @@ use Fern\Core\Services\HTTP\Reply;
 use Fern\Core\Services\HTTP\Request;
 use Fern\Core\Services\Woo\Utils;
 use Fern\Core\Utils\Types;
+use Fern\Core\Wordpress\Filters;
 use \WC_Cart;
 
 trait WooCartActions {
@@ -360,6 +361,7 @@ trait WooCartActions {
         'tax_total' => Utils::formatPrice(Types::getSafeFloat($cart->get_total_tax())),
         'needs_shipping' => (bool) $cart->needs_shipping(),
         'shipping_total' => Utils::formatPrice(Types::getSafeFloat($cart->get_shipping_total())),
+        'meta_data' => Filters::on('fern:woo:cart_meta_data', [])
       ];
     } catch (\Exception $e) {
       error_log('Error formatting cart data: ' . $e->getMessage());
