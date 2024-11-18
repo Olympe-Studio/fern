@@ -415,6 +415,7 @@ trait WooCartActions {
           'subtotal' => Utils::formatPrice(Types::getSafeFloat($cart_item['line_subtotal'] ?? 0)),
           'total' => Utils::formatPrice(Types::getSafeFloat($cart_item['line_total'] ?? 0)),
           'image' => $this->getProductImage($product),
+          'meta_data' => Filters::apply('fern:woo:cart_item_meta_data', [], $product),
         ];
 
         if ($parent_product !== null && $parent_product?->is_type('variable')) {
@@ -476,7 +477,8 @@ trait WooCartActions {
           ],
           'min_quantity' => Types::getSafeInt($variation['min_qty'] ?? 1),
           'max_quantity' => Types::getSafeInt($variation['max_qty'] ?? -1),
-          'is_in_stock' => (bool) ($variation['is_in_stock'] ?? false)
+          'is_in_stock' => (bool) ($variation['is_in_stock'] ?? false),
+          'meta_data' => Filters::apply('fern:woo:cart_item_variation_meta_data', [], $variation),
         ];
       } catch (\Exception $e) {
         error_log('Error formatting variation: ' . $e->getMessage());
