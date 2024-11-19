@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Fern\Core\Services\Woo;
 
+use Fern\Core\Wordpress\Filters;
+
 class Woocommerce {
   /**
    * Store all strings statically
@@ -63,7 +65,7 @@ class Woocommerce {
    * @return array
    */
   private static function initStrings() {
-    return [
+    return Filters::apply('fern:woo:texts', [
       'general' => [
         'shop'               => __('Shop', 'woocommerce'),
         'account'            => __('My account', 'woocommerce'),
@@ -106,6 +108,7 @@ class Woocommerce {
         'page_title'         => __('Shopping Cart', 'woocommerce'),
         'empty_cart'         => __('Your cart is currently empty.', 'woocommerce'),
         'return_to_shop'     => __('Return to shop', 'woocommerce'),
+        'close_cart'         => __('Close', 'woocommerce'),
         'update_cart'        => __('Update cart', 'woocommerce'),
         'cart_totals'        => __('Cart totals', 'woocommerce'),
         'proceed_checkout'   => __('Proceed to checkout', 'woocommerce'),
@@ -219,6 +222,6 @@ class Woocommerce {
         'incl' => __('Including tax', 'woocommerce'),
         'excl' => __('Excluding tax', 'woocommerce'),
       ],
-    ];;
+    ]);
   }
 }
