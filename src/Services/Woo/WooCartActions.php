@@ -14,9 +14,19 @@ use \WC_Cart;
 
 trait WooCartActions {
   /**
+   * Get the ecommerce content
+   */
+  public function getEcommerceContent(Request $_): Reply {
+    return new Reply(200, [
+      'success' => true,
+      'texts' => Woocommerce::getTexts(),
+    ]);
+  }
+
+  /**
    * Get initial cart and shop states
    */
-  public function getInitialState(Request $request): Reply {
+  public function getInitialState(Request $_): Reply {
     try {
       return new Reply(200, [
         'success' => true,
@@ -43,7 +53,7 @@ trait WooCartActions {
   /**
    * Clear the entire cart
    */
-  public function clearCart(Request $request): Reply {
+  public function clearCart(Request $_): Reply {
     try {
       $this->getCart()->empty_cart();
 
@@ -415,7 +425,7 @@ trait WooCartActions {
           'subtotal' => Utils::formatPrice(Types::getSafeFloat($cart_item['line_subtotal'] ?? 0)),
           'total' => Utils::formatPrice(Types::getSafeFloat($cart_item['line_total'] ?? 0)),
           'image' => $this->getProductImage($product),
-          'meta_data' => Filters::apply('fern:woo:cart_item_meta_data', [], $product),
+          'meta_data' => Filters::apply('fern:woo:cart_item_meta_data', [], $productId),
         ];
 
         if ($parent_product !== null && $parent_product?->is_type('variable')) {
@@ -478,7 +488,7 @@ trait WooCartActions {
           'min_quantity' => Types::getSafeInt($variation['min_qty'] ?? 1),
           'max_quantity' => Types::getSafeInt($variation['max_qty'] ?? -1),
           'is_in_stock' => (bool) ($variation['is_in_stock'] ?? false),
-          'meta_data' => Filters::apply('fern:woo:cart_item_variation_meta_data', [], $variation),
+          'meta_data' => Filters::apply('fern:woo:cart_item_variation_meta_data', [], $variation['variation_id']),
         ];
       } catch (\Exception $e) {
         error_log('Error formatting variation: ' . $e->getMessage());
