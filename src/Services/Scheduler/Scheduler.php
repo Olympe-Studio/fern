@@ -1,4 +1,6 @@
-<?php declare(strict_types=1);
+<?php
+
+declare(strict_types=1);
 
 namespace Fern\Core\Services\Scheduler;
 
@@ -7,7 +9,6 @@ use Fern\Core\Factory\Singleton;
 use Fern\Core\Wordpress\Events;
 use Fern\Core\Wordpress\Filters;
 use InvalidArgumentException;
-use Task;
 
 /**
  * A better way of working with WordPress cron jobs.
@@ -42,12 +43,13 @@ class Scheduler extends Singleton {
    * @throws SchedulerParsingError
    */
   public static function createSchedule(string $str): void {
-    $schedule = self::parseScheduleString($str);
     $existingSchedules = wp_get_schedules();
 
     if (isset($existingSchedules[$str])) {
       return;
     }
+
+    $schedule = self::parseScheduleString($str);
 
     /**
      * Add the schedule to the cron schedules.
