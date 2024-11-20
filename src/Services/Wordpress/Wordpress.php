@@ -83,6 +83,24 @@ class Wordpress {
   }
 
   /**
+   * Get the head as a string
+   */
+  public static function getHeadAsString(): string {
+    ob_start();
+    wp_head();
+    return ob_get_clean();
+  }
+
+  /**
+   * Get the footer as a string
+   */
+  public static function getFooterAsString(): string {
+    ob_start();
+    wp_footer();
+    return ob_get_clean();
+  }
+
+  /**
    * Remove a specific dashboard widget
    *
    * @param string $widget

@@ -80,10 +80,10 @@ class Reply {
    */
   public static function fromArray(array $data): Reply {
     $reply = new self(
-        $data['status'] ?? 200,
-        self::unserializeBody($data['body'] ?? ''),
-        $data['content_type'] ?? 'text/html',
-        $data['headers'] ?? [],
+      $data['status'] ?? 200,
+      self::unserializeBody($data['body'] ?? ''),
+      $data['content_type'] ?? 'text/html',
+      $data['headers'] ?? [],
     );
 
     if (isset($data['trailers'])) {
@@ -438,10 +438,6 @@ class Reply {
 
     $isChunked = $this->hasHeader('Transfer-Encoding') && $this->getHeader('Transfer-Encoding') === 'chunked';
 
-    if ((Fern::isDev() || Config::get('core.wp_head')) && !Request::getCurrent()->isAction()) {
-      wp_head();
-    }
-
     if ($isChunked) {
       // Send content in chunks
       $chunkSize = 4096;
@@ -453,10 +449,6 @@ class Reply {
       }
     } else {
       echo $content;
-    }
-
-    if ((Fern::isDev() || Config::get('core.wp_footer')) && !Request::getCurrent()->isAction()) {
-      wp_footer();
     }
 
     // Apply trailers if using chunked transfer

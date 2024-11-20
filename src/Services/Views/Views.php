@@ -24,11 +24,6 @@ class Views {
    */
   public static function render(string $template, array $data = [], $doingBlock = false): string {
     $engine = self::getEngine();
-
-    if (isset($data['ctx'])) {
-      throw new InvalidArgumentException('The `ctx` key is reserved for context injection. Please use `fern:core:views:ctx` filter to inject context.');
-    }
-
     if (!$doingBlock) {
       /**
        * Allow context injection for views. It won't override existing ctx.
@@ -37,7 +32,7 @@ class Views {
        *
        * @return array
        */
-      $ctx = Filters::apply('fern:core:views:ctx', []);
+      $ctx = Filters::apply('fern:core:views:ctx', $data['ctx'] ?? []);
 
       if ($ctx !== [] && !is_null($ctx)) {
         $data['ctx'] = $ctx;
