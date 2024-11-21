@@ -359,10 +359,6 @@ trait WooCartActions {
         return $this->getEmptyCartData();
       }
 
-      $cart->calculate_shipping();
-      $cart->calculate_fees();
-      $cart->calculate_totals();
-
       return [
         'items' => $this->formatCartItems($cart),
         'subtotal' => Utils::formatPrice(Types::getSafeFloat($cart->get_subtotal())),
@@ -424,6 +420,7 @@ trait WooCartActions {
           ],
           'subtotal' => Utils::formatPrice(Types::getSafeFloat($cart_item['line_subtotal'] ?? 0)),
           'total' => Utils::formatPrice(Types::getSafeFloat($cart_item['line_total'] ?? 0)),
+          'true_total' => Utils::formatPrice(Types::getSafeFloat($cart_item['line_total'] + $cart_item['line_tax'] ?? 0)),
           'image' => $this->getProductImage($product),
           'meta_data' => Filters::apply('fern:woo:cart_item_meta_data', [], $productId),
         ];
