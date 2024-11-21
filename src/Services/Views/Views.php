@@ -24,6 +24,7 @@ class Views {
    */
   public static function render(string $template, array $data = [], $doingBlock = false): string {
     $engine = self::getEngine();
+
     if (!$doingBlock) {
       /**
        * Allow context injection for views. It won't override existing ctx.

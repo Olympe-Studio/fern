@@ -1,9 +1,8 @@
-<?php
+<?php declare(strict_types=1);
 
 namespace Fern\Core\Services\Woo;
 
 class Utils {
-
   /**
    * Format a price value with currency but without HTML
    *
@@ -18,7 +17,7 @@ class Utils {
       return null;
     }
 
-    if (!function_exists("WC")) {
+    if (!function_exists('WC')) {
       return (string) $price;
     }
 
@@ -37,10 +36,10 @@ class Utils {
 
     // Format the number
     $price = number_format(
-      $price,
-      $args['decimals'],
-      $args['decimal_separator'],
-      $args['thousand_separator'],
+        $price,
+        $args['decimals'],
+        $args['decimal_separator'],
+        $args['thousand_separator'],
     );
 
     // Trim zeros if enabled
@@ -53,9 +52,9 @@ class Utils {
 
     // Format with currency symbol
     return html_entity_decode(($negative ? '-' : '') . sprintf(
-      $args['price_format'],
-      $currency,
-      $price,
+        $args['price_format'],
+        $currency,
+        $price,
     ));
   }
 }

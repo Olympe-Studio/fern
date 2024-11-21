@@ -19,7 +19,6 @@ use Fern\Core\Wordpress\Events;
 use Fern\Core\Wordpress\Filters;
 use ReflectionMethod;
 use Throwable;
-use WP_Post_Type;
 
 /**
  * @phpstan-type RouterConfig array{
@@ -192,7 +191,6 @@ class Router extends Singleton {
        */
       $id = Filters::apply('fern:core:router:resolve_id', (int) $id, $this->request);
 
-
       if (!is_numeric($id) || $id < 0) {
         if (!is_null($id)) {
           throw new RouterException("Invalid ID: {$id}. Must be an integer greater than or equal to 0 or null.");
@@ -217,11 +215,11 @@ class Router extends Singleton {
      */
     if ($this->request->isArchive()) {
       $controller = $this->resolveArchivePage($type, $viewType);
+
       if ($controller !== null) {
         return $controller;
       }
     }
-
 
     // If we are on a Page unhandled, it's going to fail.
     if ($type === null || $type === 'page' && $viewType !== 'admin') {
@@ -253,7 +251,7 @@ class Router extends Singleton {
   /**
    * Resolve the controller for an archive page using a page ID.
    *
-   * @param string|null $type The type to resolve the archive page for
+   * @param string|null $type     The type to resolve the archive page for
    * @param string|null $viewType The view type to resolve the archive page for
    *
    * @return string|null The controller name or null if it doesn't exists.
@@ -384,9 +382,9 @@ class Router extends Singleton {
   private function canRunAction(string $name, object $controller): bool {
     try {
       $validation = $this->attributeManagerr->validateMethod(
-        $controller,
-        $name,
-        $this->request,
+          $controller,
+          $name,
+          $this->request,
       );
     } catch (AttributeValidationException $e) {
       // Hide the error from the user
@@ -421,6 +419,7 @@ class Router extends Singleton {
     }
 
     $req = $this->request;
+
     if ($req->is404()) {
       $this->handle404();
     } else {
@@ -450,6 +449,7 @@ class Router extends Singleton {
     }
 
     $disabled = $this->getConfig()['disable'] ?? [];
+
     return $this->request->is404()
       // Always return 404 for attachments as it should never create pages beside the media URL.
       || $this->request->isAttachment()

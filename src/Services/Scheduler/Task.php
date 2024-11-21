@@ -16,11 +16,11 @@ class Task {
    * @param int          $startAt  Unix timestamp when the task starts, -1 for immediate
    */
   public function __construct(
-    private readonly string $name,
-    private readonly string $interval,
-    private readonly mixed $callback,
-    private readonly array $args = [],
-    private readonly int $startAt = -1,
+      private readonly string $name,
+      private readonly string $interval,
+      private readonly mixed $callback,
+      private readonly array $args = [],
+      private readonly int $startAt = -1,
   ) {
   }
 

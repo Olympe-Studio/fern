@@ -24,7 +24,6 @@
     "format": "php-cs-fixer fix --config=./phpcs.dist.php",
     "format:check": "php-cs-fixer fix --config=./phpcs.dist.php --dry-run --diff",
     "phpstan": "phpstan analyse src --memory-limit=2048M"
-
   },
   "require-dev": {
     "pestphp/pest": "3.x-dev",

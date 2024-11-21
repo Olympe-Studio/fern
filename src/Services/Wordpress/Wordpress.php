@@ -24,6 +24,26 @@ class Wordpress {
   }
 
   /**
+   * Get the head as a string
+   */
+  public static function getHeadAsString(): string {
+    ob_start();
+    wp_head();
+
+    return ob_get_clean();
+  }
+
+  /**
+   * Get the footer as a string
+   */
+  public static function getFooterAsString(): string {
+    ob_start();
+    wp_footer();
+
+    return ob_get_clean();
+  }
+
+  /**
    * Setup excerpt filter
    */
   private static function bootExcerpt(): void {
@@ -83,30 +103,7 @@ class Wordpress {
   }
 
   /**
-   * Get the head as a string
-   */
-  public static function getHeadAsString(): string {
-    ob_start();
-    wp_head();
-    return ob_get_clean();
-  }
-
-  /**
-   * Get the footer as a string
-   */
-  public static function getFooterAsString(): string {
-    ob_start();
-    wp_footer();
-    return ob_get_clean();
-  }
-
-  /**
    * Remove a specific dashboard widget
-   *
-   * @param string $widget
-   * @param string $context
-   *
-   * @return void
    */
   private static function removeDashboardWidget(string $widget, string $context = 'normal'): void {
     remove_meta_box($widget, 'dashboard', $context);

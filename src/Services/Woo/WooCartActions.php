@@ -4,13 +4,20 @@ declare(strict_types=1);
 
 namespace Fern\Core\Services\Woo;
 
+use \WC_Cart;
 use Exception;
 use Fern\Core\Services\HTTP\Reply;
 use Fern\Core\Services\HTTP\Request;
-use Fern\Core\Services\Woo\Utils;
 use Fern\Core\Utils\Types;
 use Fern\Core\Wordpress\Filters;
-use \WC_Cart;
+use WC_Product;
+use WC_Product_Variable;
+use function WC_attribute_label;
+use function WC_get_price_decimal_separator;
+use function WC_get_price_decimals;
+use function WC_get_price_thousand_separator;
+use function WC_get_product;
+use function WC_tax_enabled;
 
 trait WooCartActions {
   /**
@@ -35,10 +42,10 @@ trait WooCartActions {
           'currency' => get_woocommerce_currency(),
           'currency_symbol' => get_woocommerce_currency_symbol(),
           'currency_position' => get_option('woocommerce_currency_pos'),
-          'thousand_separator' => \WC_get_price_thousand_separator(),
-          'decimal_separator' => \WC_get_price_decimal_separator(),
-          'price_decimals' => \WC_get_price_decimals(),
-          'tax_enabled' => \WC_tax_enabled(),
+          'thousand_separator' => WC_get_price_thousand_separator(),
+          'decimal_separator' => WC_get_price_decimal_separator(),
+          'price_decimals' => WC_get_price_decimals(),
+          'tax_enabled' => WC_tax_enabled(),
           'calc_taxes' => get_option('woocommerce_calc_taxes'),
         ],
       ]);
@@ -82,7 +89,7 @@ trait WooCartActions {
     $cartItemKey = $action->get('cart_item_key');
 
     try {
-      $product = Types::getSafeWpValue(\WC_get_product($productId));
+      $product = Types::getSafeWpValue(WC_get_product($productId));
 
       if ($product === null) {
         throw new Exception('Product not found');
@@ -100,15 +107,15 @@ trait WooCartActions {
 
       // Add the new/modified item
       $newKey = $this->getCart()->add_to_cart(
-        $productId,
-        $quantity,
-        $variationId,
-        $variation,
+          $productId,
+          $quantity,
+          $variationId,
+          $variation,
       );
 
       if (!$newKey) {
         throw new Exception(
-          $product->is_type('variable')
+            $product->is_type('variable')
             ? 'Failed to add variation to cart'
             : 'Failed to add product to cart',
         );
@@ -137,7 +144,7 @@ trait WooCartActions {
 
     $appliedCoupons = $this->getCart()->get_applied_coupons();
 
-    if (!is_array($appliedCoupons) || !in_array($coupon, $appliedCoupons)) {
+    if (!is_array($appliedCoupons) || !in_array($coupon, $appliedCoupons, true)) {
       return new Reply(400, [
         'success' => false,
         'message' => Woocommerce::getText('errors.already_applied'),
@@ -221,9 +228,6 @@ trait WooCartActions {
 
   /**
    * Update cart item quantity and/or variation
-   *
-   * @param Request $request
-   * @return Reply
    */
   public function updateCartItem(Request $request): Reply {
     $action = $request->getAction();
@@ -243,6 +247,7 @@ trait WooCartActions {
       // If only updating quantity, use existing method
       if (!$variationId && empty($variation)) {
         $this->updateCartItemQuantity($request);
+
         return new Reply(200, [
           'success' => true,
           'message' => 'Cart item updated',
@@ -257,10 +262,10 @@ trait WooCartActions {
 
       // Add the new variation
       $newKey = $this->getCart()->add_to_cart(
-        $productId,
-        $quantity,
-        $variationId,
-        $variation,
+          $productId,
+          $quantity,
+          $variationId,
+          $variation,
       );
 
       if (!$newKey) {
@@ -330,24 +335,6 @@ trait WooCartActions {
   }
 
   /**
-   * Get the WooCommerce cart instance
-   *
-   * @return \WC_Cart|never
-   */
-  private function getCart(): \WC_Cart {
-    if (!class_exists('\WC_Cart')) {
-      $reply = new Reply(400, [
-        'success' => false,
-        'error' => 'WooCommerce is not installed',
-      ]);
-      $reply->contentType('application/json');
-      $reply->send();
-    }
-
-    return WC()->cart;
-  }
-
-  /**
    * Format cart data for the frontend with validation
    *
    * @return array<string, mixed>
@@ -355,7 +342,8 @@ trait WooCartActions {
   protected function formatCartData(): array {
     try {
       $cart = $this->getCart();
-      if (!$cart instanceof \WC_Cart) {
+
+      if (!$cart instanceof WC_Cart) {
         return $this->getEmptyCartData();
       }
 
@@ -367,22 +355,21 @@ trait WooCartActions {
         'tax_total' => Utils::formatPrice(Types::getSafeFloat($cart->get_total_tax())),
         'needs_shipping' => (bool) $cart->needs_shipping(),
         'shipping_total' => Utils::formatPrice(Types::getSafeFloat($cart->get_shipping_total())),
-        'meta_data' => Filters::apply('fern:woo:cart_meta_data', [])
+        'meta_data' => Filters::apply('fern:woo:cart_meta_data', []),
       ];
-    } catch (\Exception $e) {
+    } catch (Exception $e) {
       error_log('Error formatting cart data: ' . $e->getMessage());
+
       return $this->getEmptyCartData();
     }
   }
 
   /**
    * Format cart items with validation
-   *
-   * @param \WC_Cart $cart
-   * @return array
    */
-  protected function formatCartItems(\WC_Cart $cart): array {
+  protected function formatCartItems(WC_Cart $cart): array {
     $cartItems = $cart->get_cart();
+
     if (!is_array($cartItems)) {
       return [];
     }
@@ -390,12 +377,12 @@ trait WooCartActions {
     return array_map(function ($cart_item_key, $cart_item) {
       try {
         if (!isset($cart_item['data']) || !is_object($cart_item['data'])) {
-          throw new \Exception('Invalid cart item data');
+          throw new Exception('Invalid cart item data');
         }
 
         $product = $cart_item['data'];
         $productId = Types::getSafeInt($cart_item['product_id'] ?? 0);
-        $parent_product = $parent_product = $productId ? Types::getSafeWpValue(\WC_get_product($productId)) : null;
+        $parent_product = $parent_product = $productId ? Types::getSafeWpValue(WC_get_product($productId)) : null;
 
         $regular_price = Types::getSafeFloat($product->get_regular_price());
         $sale_price = Types::getSafeFloat($product->get_sale_price());
@@ -430,8 +417,9 @@ trait WooCartActions {
         }
 
         return $item;
-      } catch (\Exception $e) {
+      } catch (Exception $e) {
         error_log('Error formatting cart item: ' . $e->getMessage());
+
         return null;
       }
     }, array_keys($cartItems), $cartItems);
@@ -439,30 +427,26 @@ trait WooCartActions {
 
   /**
    * Get variable product data with validation
-   *
-   * @param \WC_Product_Variable $parent_product
-   * @return array
    */
-  protected function getVariableProductData(\WC_Product_Variable $parent_product): array {
+  protected function getVariableProductData(WC_Product_Variable $parent_product): array {
     try {
       return [
         'variations' => $this->formatVariations($parent_product),
-        'attributes' => $this->formatAttributes($parent_product)
+        'attributes' => $this->formatAttributes($parent_product),
       ];
-    } catch (\Exception $e) {
+    } catch (Exception $e) {
       error_log('Error getting variable product data: ' . $e->getMessage());
+
       return ['variations' => [], 'attributes' => []];
     }
   }
 
   /**
    * Format variations with validation
-   *
-   * @param \WC_Product_Variable $parent_product
-   * @return array
    */
-  protected function formatVariations(\WC_Product_Variable $parent_product): array {
+  protected function formatVariations(WC_Product_Variable $parent_product): array {
     $variations = $parent_product->get_available_variations();
+
     if (!is_array($variations)) {
       return [];
     }
@@ -487,8 +471,9 @@ trait WooCartActions {
           'is_in_stock' => (bool) ($variation['is_in_stock'] ?? false),
           'meta_data' => Filters::apply('fern:woo:cart_item_variation_meta_data', [], $variation['variation_id']),
         ];
-      } catch (\Exception $e) {
+      } catch (Exception $e) {
         error_log('Error formatting variation: ' . $e->getMessage());
+
         return null;
       }
     }, $variations);
@@ -496,19 +481,17 @@ trait WooCartActions {
 
   /**
    * Format attributes with validation
-   *
-   * @param \WC_Product_Variable $parent_product
-   * @return array
    */
-  protected function formatAttributes(\WC_Product_Variable $parent_product): array {
+  protected function formatAttributes(WC_Product_Variable $parent_product): array {
     $variation_attributes = Types::getSafeWpValue($parent_product->get_variation_attributes());
+
     if (!is_array($variation_attributes)) {
       return [];
     }
 
     return array_reduce(
-      array_keys($variation_attributes),
-      function ($acc, $attribute_name) use ($variation_attributes) {
+        array_keys($variation_attributes),
+        function ($acc, $attribute_name) use ($variation_attributes) {
         try {
           $taxonomy = Types::getSafeString(str_replace('pa_', '', $attribute_name));
           $options = $variation_attributes[$attribute_name] ?? [];
@@ -518,28 +501,26 @@ trait WooCartActions {
           }
 
           $acc[$taxonomy] = [
-            'name' => Types::getSafeString(\WC_attribute_label($attribute_name)),
+            'name' => Types::getSafeString(WC_attribute_label($attribute_name)),
             'options' => array_map(
-              function ($option) {
-                return Types::getSafeString(strtolower($option));
-              },
-              $options
-            )
+                fn ($option) => Types::getSafeString(strtolower($option)),
+                $options,
+            ),
           ];
+
           return $acc;
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
           error_log('Error formatting attribute: ' . $e->getMessage());
+
           return $acc;
         }
       },
-      []
+        [],
     );
   }
 
   /**
    * Get empty cart data structure
-   *
-   * @return array
    */
   protected function getEmptyCartData(): array {
     return [
@@ -555,42 +536,50 @@ trait WooCartActions {
 
   /**
    * Validate and sanitize variation data
-   *
-   * @param array $variation
-   * @return array
    */
   protected function validateVariationData(array $variation): array {
-    return array_map(function ($value) {
-      return Types::getSafeString($value);
-    }, $variation);
+    return array_map(fn ($value) => Types::getSafeString($value), $variation);
   }
 
   /**
    * Calculate sale amount with validation
-   *
-   * @param float $regular_price
-   * @param float $sale_price
-   * @param bool $is_on_sale
-   * @return int|null
    */
   protected function calculateSaleAmount(float $regular_price, float $sale_price, bool $is_on_sale = true): ?int {
     if ($is_on_sale && $regular_price > 0) {
       return (int) round((($regular_price - $sale_price) / $regular_price) * 100);
     }
+
     return null;
   }
 
   /**
    * Get product image with fallback
-   *
-   * @param \WC_Product $product
-   * @return string|null
    */
-  protected function getProductImage(\WC_Product $product): ?string {
+  protected function getProductImage(WC_Product $product): ?string {
     $image_id = $product->get_image_id();
+
     if (!$image_id) {
       return null;
     }
+
     return Types::getSafeUrl(wp_get_attachment_image_url($image_id, 'thumbnail'));
+  }
+
+  /**
+   * Get the WooCommerce cart instance
+   *
+   * @return WC_Cart|never
+   */
+  private function getCart(): WC_Cart {
+    if (!class_exists('\WC_Cart')) {
+      $reply = new Reply(400, [
+        'success' => false,
+        'error' => 'WooCommerce is not installed',
+      ]);
+      $reply->contentType('application/json');
+      $reply->send();
+    }
+
+    return WC()->cart;
   }
 }

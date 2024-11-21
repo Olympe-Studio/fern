@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Fern\Core\Services\HTTP;
 
-use Fern\Core\Config;
 use Fern\Core\Errors\ReplyParsingError;
-use Fern\Core\Fern;
 use Fern\Core\Utils\JSON;
 use Fern\Core\Wordpress\Events;
 use Fern\Core\Wordpress\Filters;
@@ -80,10 +78,10 @@ class Reply {
    */
   public static function fromArray(array $data): Reply {
     $reply = new self(
-      $data['status'] ?? 200,
-      self::unserializeBody($data['body'] ?? ''),
-      $data['content_type'] ?? 'text/html',
-      $data['headers'] ?? [],
+        $data['status'] ?? 200,
+        self::unserializeBody($data['body'] ?? ''),
+        $data['content_type'] ?? 'text/html',
+        $data['headers'] ?? [],
     );
 
     if (isset($data['trailers'])) {
