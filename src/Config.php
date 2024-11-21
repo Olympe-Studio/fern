@@ -5,13 +5,16 @@ declare(strict_types=1);
 namespace Fern\Core;
 
 use Fern\Core\Errors\FernConfigurationExceptions;
+use Fern\Core\Factory\Singleton;
+use Fern\Core\Utils\JSON;
 use Fern\Core\Wordpress\Events;
 use Fern\Core\Wordpress\Filters;
-use Fern\Core\Factory\Singleton;
-
+/**
+ * @phpstan-type ConfigValue array<string, mixed>|mixed
+ */
 class Config extends Singleton {
   /**
-   * @var array Stores the configuration data
+   * @var array<string, ConfigValue>
    */
   protected array $config;
 
@@ -25,12 +28,12 @@ class Config extends Singleton {
   /**
    * Get a configuration value by key
    *
-   * @param  string  $key      The configuration key. Support dot notation like `seo.flags.sitemap`.
-   * @param  mixed   $default  The default value if the key is not found
+   * @param string $key     The configuration key. Support dot notation like `seo.flags.sitemap`.
+   * @param mixed  $default The default value if the key is not found
    *
-   * @return mixed   The configuration value or default
+   * @return ?mixed The configuration value or default
    */
-  public static function get(string $key, $default = null) {
+  public static function get(string $key, mixed $default = null): mixed {
     $keys = explode('.', $key);
     $value = static::getInstance()->config;
 
@@ -38,6 +41,7 @@ class Config extends Singleton {
       if (!is_array($value) || !array_key_exists($subKey, $value)) {
         return $default;
       }
+
       $value = $value[$subKey];
     }
 
@@ -47,7 +51,7 @@ class Config extends Singleton {
   /**
    * Checks if a configuration exists.
    *
-   * @param  string  $key      The configuration key. Support dot notation like `seo.flags.sitemap`.
+   * @param string $key The configuration key. Support dot notation like `seo.flags.sitemap`.
    *
    * @return boolean
    */
@@ -58,17 +62,18 @@ class Config extends Singleton {
   /**
    * Get all configuration values
    *
-   * @return array All configuration values
+   * @return array<string, ConfigValue>
    */
   public static function all(): array {
     $instance = static::getInstance();
+
     return $instance->config;
   }
 
   /**
    * Show the config as an array
    *
-   * @return array
+   * @return array<string, ConfigValue>
    */
   public static function toArray(): array {
     return static::all();
@@ -76,17 +81,15 @@ class Config extends Singleton {
 
   /**
    * Show the config as json
-   *
-   * @return string
    */
   public static function toJson(): string {
-    return json_encode(self::toArray());
+    return JSON::encode(self::toArray()) ?: '';
   }
 
   /**
    * Set the entire configuration array
    *
-   * @param array $config The new configuration array
+   * @param array<string, ConfigValue> $config
    */
   public function setConfig(array $config): void {
     $this->config = $config;
@@ -95,11 +98,9 @@ class Config extends Singleton {
   /**
    * Boot the configuration
    *
-   * @param array $config The configuration array
-   *
-   * @return void
+   * @param array<string, ConfigValue> $config
    */
-  public static function boot($config): void {
+  public static function boot(array $config): void {
     $instance = static::getInstance();
 
     if (!isset($config['root'])) {

@@ -4,8 +4,14 @@ declare(strict_types=1);
 
 namespace Fern\Core\Utils;
 
+use Closure;
+use Exception;
 use Fern\Core\Factory\Singleton;
 use Fern\Core\Wordpress\Events;
+use InvalidArgumentException;
+use ReflectionFunction;
+use RuntimeException;
+use Throwable;
 
 /**
  * Cache class for managing in-memory and persistent caches with expiration.
@@ -13,17 +19,22 @@ use Fern\Core\Wordpress\Events;
  * This class implements a caching mechanism with two levels:
  * 1. In-memory cache for quick access
  * 2. Persistent cache that can be saved and retrieved across requests, with expiration
- *
  */
 class Cache extends Singleton {
-  /** @var array In-memory cache storage */
-  protected array $cache;
-
-  /** @var array Persistent cache storage */
-  protected array $persistentCache;
+  /** @var string The option name for storing persistent cache */
+  const PERSISTENT_CACHE_OPTION = 'fern:core:persistent_cache';
 
   /** @var int Default expiration time in seconds (4 hours) */
   const DEFAULT_EXPIRATION = 14400; // 4 * 60 * 60
+
+  /** @var array<string, mixed> In-memory cache storage */
+  protected array $cache;
+
+  /** @var array<string, array{value: mixed, expires: int}> Persistent cache storage */
+  protected array $persistentCache;
+
+  /** @var bool Track if persistent cache has been modified */
+  protected bool $isDirty = false;
 
   /**
    * Constructor for the Cache class.
@@ -34,23 +45,28 @@ class Cache extends Singleton {
     $this->persistentCache = [];
     $this->init();
 
-    Events::addHandlers('shutdown', [$this, 'save']);
+    Events::on('shutdown', [$this, 'save']);
   }
 
   /**
-   * Initializes the persistent cache from WordPress object cache.
+   * Returns true if the persistent cache has been modified.
    */
-  protected function init(): void {
-    $persistent = wp_cache_get('persistent_cache', 'fern:core') ?: [];
-    if (!empty($persistent)) {
-      $this->persistentCache = $this->removeExpiredItems($persistent);
-    }
+  public function isDirty(): bool {
+    return $this->isDirty;
+  }
+
+  /**
+   * Resets the dirty state of the persistent cache.
+   */
+  public function setDirtyState(bool $isDirty): void {
+    $this->isDirty = $isDirty;
   }
 
   /**
    * Static method to retrieve a value from the cache.
    *
    * @param string $key The key to retrieve.
+   *
    * @return mixed The cached value or null if not found or expired.
    */
   public static function get(string $key): mixed {
@@ -60,10 +76,10 @@ class Cache extends Singleton {
   /**
    * Static method to set a value in the cache.
    *
-   * @param string $key The key to set.
-   * @param mixed $value The value to cache.
-   * @param bool $persist Whether to store in persistent cache.
-   * @param int $expiration Expiration time in seconds (default 4 hours).
+   * @param string $key        The key to set.
+   * @param mixed  $value      The value to cache.
+   * @param bool   $persist    Whether to store in persistent cache.
+   * @param int    $expiration Expiration time in seconds (default 4 hours).
    */
   public static function set(string $key, mixed $value, bool $persist = false, int $expiration = self::DEFAULT_EXPIRATION): void {
     self::getInstance()->_set($key, $value, $persist, $expiration);
@@ -73,6 +89,7 @@ class Cache extends Singleton {
    * Retrieves a value from the cache.
    *
    * @param string $key The key to retrieve.
+   *
    * @return mixed The cached value or null if not found or expired.
    */
   public function _get(string $key): mixed {
@@ -82,10 +99,13 @@ class Cache extends Singleton {
 
     if (isset($this->persistentCache[$key])) {
       $item = $this->persistentCache[$key];
+
       if ($this->isExpired($item)) {
         unset($this->persistentCache[$key]);
+
         return null;
       }
+
       return $item['value'];
     }
 
@@ -95,10 +115,10 @@ class Cache extends Singleton {
   /**
    * Sets a value in the cache.
    *
-   * @param string $key The key to set.
-   * @param mixed $value The value to cache.
-   * @param bool $persist Whether to store in persistent cache.
-   * @param int $expiration Expiration time in seconds (default 4 hours).
+   * @param string $key        The key to set.
+   * @param mixed  $value      The value to cache.
+   * @param bool   $persist    Whether to store in persistent cache.
+   * @param int    $expiration Expiration time in seconds (default 4 hours).
    */
   public function _set(string $key, mixed $value, bool $persist = false, int $expiration = self::DEFAULT_EXPIRATION): void {
     $this->cache[$key] = $value;
@@ -106,41 +126,48 @@ class Cache extends Singleton {
     if ($persist) {
       $this->persistentCache[$key] = [
         'value' => $value,
-        'expires' => time() + $expiration
+        'expires' => time() + $expiration,
       ];
+
+      $this->isDirty = true;
     }
-  }
-
-  /**
-   * Checks if a cache item is expired.
-   *
-   * @param array $item The cache item to check.
-   * @return bool True if expired, false otherwise.
-   */
-  protected function isExpired(array $item): bool {
-    return isset($item['expires']) && $item['expires'] < time();
-  }
-
-  /**
-   * Removes expired items from the given cache array.
-   *
-   * @param array $cache The cache array to clean.
-   * @return array The cleaned cache array.
-   */
-  protected function removeExpiredItems(array $cache): array {
-    return array_filter($cache, fn($item) => !$this->isExpired($item));
   }
 
   /**
    * Returns both in-memory and persistent caches.
    *
-   * @return array An array containing both cache arrays.
+   * @return array{inmemory: array<string, mixed>, persistent: array<string, array{value: mixed, expires:int}>}
    */
   public function getCaches(): array {
     return [
       'inmemory' => $this->cache,
       'persistent' => $this->persistentCache,
     ];
+  }
+
+  /**
+   * Memoizes a callback's result based on its dependencies.
+   * Similar to React's useMemo, it will only recompute the value if dependencies change.
+   *
+   * @param callable     $callback     The callback function to memoize
+   * @param array<mixed> $dependencies Array of values that determine if cache should be invalidated
+   * @param int          $expiration   Cache expiration time in seconds
+   * @param bool         $persist      Whether to persist the cache across requests
+   *
+   * @return mixed The memoized result
+   *
+   * @throws InvalidArgumentException If dependencies are not serializable
+   * @throws RuntimeException         If callback execution fails
+   */
+  public static function useMemo(
+      callable $callback,
+      array $dependencies = [],
+      int $expiration = self::DEFAULT_EXPIRATION,
+      bool $persist = false,
+  ): mixed {
+    $instance = self::getInstance();
+
+    return $instance->_useMemo($callback, $dependencies, $expiration, $persist);
   }
 
   /**
@@ -157,7 +184,8 @@ class Cache extends Singleton {
   public static function flush(): void {
     $cache = self::getInstance();
     $cache->_flush();
-    wp_cache_delete('persistent_cache', 'fern:core');
+    $cache->setDirtyState(true);
+    delete_option(self::PERSISTENT_CACHE_OPTION);
   }
 
   /**
@@ -165,7 +193,184 @@ class Cache extends Singleton {
    */
   public static function save(): void {
     $cache = self::getInstance();
-    $cleanPersistentCache = $cache->removeExpiredItems($cache->getCaches()['persistent']);
-    wp_cache_set('persistent_cache', $cleanPersistentCache, 'fern:core');
+    $isDirty = $cache->isDirty();
+
+    if (!$isDirty) {
+      return;
+    }
+
+    $persistentCache = $cache->getCaches()['persistent'];
+
+    // Maybe we flushed the cache?
+    if (empty($persistentCache)) {
+      delete_option(self::PERSISTENT_CACHE_OPTION);
+
+      return;
+    }
+
+    $cleanPersistentCache = $cache->removeExpiredItems($persistentCache);
+
+    if (count($cleanPersistentCache) === count($persistentCache)) {
+      $isDirty = false;
+    }
+
+    if ($isDirty) {
+      update_option(self::PERSISTENT_CACHE_OPTION, $cleanPersistentCache, true);
+    }
+
+    if (empty($cleanPersistentCache)) {
+      delete_option(self::PERSISTENT_CACHE_OPTION);
+    }
+
+    $cache->setDirtyState(false);
+  }
+
+  /**
+   * Initializes the persistent cache from WordPress object cache.
+   */
+  protected function init(): void {
+    $persistent = get_option(self::PERSISTENT_CACHE_OPTION, []);
+
+    if (!empty($persistent)) {
+      $this->persistentCache = $this->removeExpiredItems($persistent);
+
+      // If items were removed due to expiration, mark as dirty
+      if (count($persistent) !== count($this->persistentCache)) {
+        $this->isDirty = true;
+      }
+    }
+  }
+
+  /**
+   * Checks if a cache item is expired.
+   *
+   * @param array<string, mixed> $item The cache item to check.
+   *
+   * @return bool True if expired, false otherwise.
+   */
+  protected function isExpired(array $item): bool {
+    return isset($item['expires']) && $item['expires'] < time();
+  }
+
+  /**
+   * Removes expired items from the given cache array.
+   *
+   * @param array<string, array{value: mixed, expires: int}> $cache The cache array to clean.
+   *
+   * @return array<string, array{value: mixed, expires: int}> The cleaned cache array.
+   */
+  protected function removeExpiredItems(array $cache): array {
+    return array_filter($cache, fn($item) => !$this->isExpired($item));
+  }
+
+  /**
+   * Internal implementation of useMemo
+   *
+   * @param callable     $callback     The callback function to memoize
+   * @param array<mixed> $dependencies Array of values that determine if cache should be invalidated
+   * @param int          $expiration   Cache expiration time in seconds
+   * @param bool         $persist      Whether to persist the cache across requests
+   */
+  protected function _useMemo(
+      callable $callback,
+      array $dependencies,
+      int $expiration,
+      bool $persist,
+  ): mixed {
+    $key = $this->generateMemoKey($callback, $dependencies);
+    $cache = $this;
+
+    return function (...$args) use ($cache, $key, $callback, $persist, $expiration) {
+      $cached = $cache->_get($key);
+
+      if ($cached !== null) {
+        return $cached;
+      }
+
+      try {
+        $result = $callback(...$args);
+        $this->_set($key, $result, $persist, $expiration);
+
+        return $result;
+      } catch (Throwable $e) {
+        throw new RuntimeException(
+            'Failed to execute memoized callback: ' . $e->getMessage(),
+            0,
+            $e,
+        );
+      }
+    };
+  }
+
+  /**
+   * Generates a unique cache key for the callback and its dependencies
+   *
+   * @param callable     $callback     The callback function to memoize
+   * @param array<mixed> $dependencies Array of values that determine if cache should be invalidated
+   *
+   * @return string The generated cache key
+   *
+   * @throws InvalidArgumentException
+   */
+  protected function generateMemoKey(callable $callback, array $dependencies): string {
+    try {
+      if ($callback instanceof Closure) {
+        $reflection = new ReflectionFunction($callback);
+        $fileName = $reflection->getFileName();
+        $startLine = $reflection->getStartLine();
+        $endLine = $reflection->getEndLine();
+
+        if ($fileName && $startLine && $endLine) {
+          $file = file($fileName);
+
+          if (!is_array($file)) {
+            throw new InvalidArgumentException('Failed to read file');
+          }
+
+          $code = implode('', array_slice($file, $startLine - 1, $endLine - $startLine + 1));
+        } else {
+          $code = spl_object_hash($callback);
+        }
+
+        // Include file name and lines to differentiate identical functions in different files
+        $callbackKey = $fileName . ':' . $startLine . ':' . $code;
+      } elseif (is_array($callback)) {
+        // Handle array callbacks (e.g., [$object, 'method'])
+        if (is_object($callback[0])) {
+          $callbackKey = spl_object_hash($callback[0]) . '::' . $callback[1];
+        } else {
+          $callbackKey = $callback[0] . '::' . $callback[1];
+        }
+        /** @phpstan-ignore-next-line */
+      } elseif (is_string($callback) && is_callable($callback)) {
+        // Handle string callbacks (e.g., 'functionName')
+        $callbackKey = $callback;
+      } else {
+        throw new InvalidArgumentException('Unsupported callback type');
+      }
+
+      // Use xxh32 if available, fallback to crc32 for dependencies
+      try {
+        if (function_exists('hash')) {
+          $depsKey = hash('xxh32', serialize($dependencies));
+        } else {
+          $depsKey = (string) crc32(serialize($dependencies));
+        }
+      } catch (Exception $e) {
+        throw new InvalidArgumentException(
+            'Dependencies must be serializable: ' . $e->getMessage(),
+        );
+      }
+
+      if (function_exists('hash')) {
+        return 'memo_' . hash('xxh32', $callbackKey . '_' . $depsKey);
+      }
+
+      return 'memo_' . (string) crc32($callbackKey . '_' . $depsKey);
+    } catch (Exception $e) {
+      throw new InvalidArgumentException(
+          'Failed to generate memo key: ' . $e->getMessage(),
+      );
+    }
   }
 }

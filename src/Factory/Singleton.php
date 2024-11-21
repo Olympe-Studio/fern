@@ -1,9 +1,11 @@
 <?php
+
 declare(strict_types=1);
+
 namespace Fern\Core\Factory;
 
-
 abstract class Singleton {
+  /** @var array<string, static> */
   private static array $_instances = [];
 
   protected function __construct() {
@@ -19,16 +21,18 @@ abstract class Singleton {
   /**
    * Prevent instance unserialization
    */
-  final public function __wakeup() {
+  final public function __wakeup(): void {
     // Private wakeup method to prevent unserializing of the instance
   }
 
   /**
    * Return the unique instance of the class called.
    *
-   * @return object The class classed as a unique instance.
+   * @param array<int, mixed> $args
+   *
+   * @return static The class classed as a unique instance.
    */
-  public static function getInstance(...$args) {
+  public static function getInstance(array ...$args): static {
     $calledClass = get_called_class();
 
     if (!isset(self::$_instances[$calledClass])) {
