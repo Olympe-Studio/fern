@@ -12,6 +12,86 @@ class Woocommerce {
    */
   private static array $strings = [];
 
+  public static array $config = [];
+
+  public static function getConfig(): array {
+    if (empty(self::$config)) {
+      self::$config = Filters::apply('fern:woo:config', [
+        // Currency and Price Settings
+        'currency' => get_woocommerce_currency(),
+        'currency_symbol' => get_woocommerce_currency_symbol(),
+        'currency_position' => get_option('woocommerce_currency_pos'),
+        'thousand_separator' => WC_get_price_thousand_separator(),
+        'decimal_separator' => WC_get_price_decimal_separator(),
+        'price_decimals' => WC_get_price_decimals(),
+
+        // Tax Settings
+        'tax_enabled' => WC_tax_enabled(),
+        'calc_taxes' => get_option('woocommerce_calc_taxes'),
+        'tax_display_shop' => get_option('woocommerce_tax_display_shop'),
+        'tax_display_cart' => get_option('woocommerce_tax_display_cart'),
+        'prices_include_tax' => get_option('woocommerce_prices_include_tax'),
+
+        // Important Pages
+        'cart_page_url' => wc_get_cart_url(),
+        'checkout_page_url' => wc_get_checkout_url(),
+        'account_page_url' => wc_get_account_endpoint_url('dashboard'),
+        'shop_page_url' => get_permalink(wc_get_page_id('shop')),
+        'terms_page_url' => get_permalink(get_option('woocommerce_terms_page_id')),
+
+        // Store Information
+        'store_address' => get_option('woocommerce_store_address'),
+        'store_city' => get_option('woocommerce_store_city'),
+        'store_postcode' => get_option('woocommerce_store_postcode'),
+        'store_country' => get_option('woocommerce_default_country'),
+
+        // Product Settings
+        'weight_unit' => get_option('woocommerce_weight_unit'),
+        'dimension_unit' => get_option('woocommerce_dimension_unit'),
+        'products_per_page' => get_option('posts_per_page'),
+        'catalog_orderby' => get_option('woocommerce_default_catalog_orderby'),
+        'review_ratings_enabled' => get_option('woocommerce_enable_reviews'),
+
+        // Inventory Settings
+        'manage_stock' => get_option('woocommerce_manage_stock'),
+        'stock_format' => get_option('woocommerce_stock_format'),
+        'notify_low_stock' => get_option('woocommerce_notify_low_stock'),
+        'notify_no_stock' => get_option('woocommerce_notify_no_stock'),
+        'low_stock_amount' => get_option('woocommerce_notify_low_stock_amount'),
+
+        // Checkout Settings
+        'enable_guest_checkout' => get_option('woocommerce_enable_guest_checkout'),
+        'enable_checkout_login_reminder' => get_option('woocommerce_enable_checkout_login_reminder'),
+        'enable_signup_and_login_from_checkout' => get_option('woocommerce_enable_signup_and_login_from_checkout'),
+        'enable_myaccount_registration' => get_option('woocommerce_enable_myaccount_registration'),
+
+        // Email Settings
+        'admin_email' => get_option('admin_email'),
+        'email_from_name' => get_option('woocommerce_email_from_name'),
+        'email_from_address' => get_option('woocommerce_email_from_address'),
+
+        // Digital Products
+        'downloads_require_login' => get_option('woocommerce_downloads_require_login'),
+        'downloads_grant_access_after_payment' => get_option('woocommerce_downloads_grant_access_after_payment'),
+
+        // Image Sizes
+        'image_sizes' => [
+          'thumbnail' => [
+            'width' => get_option('woocommerce_thumbnail_image_width'),
+            'height' => get_option('woocommerce_thumbnail_image_height'),
+            'crop' => get_option('woocommerce_thumbnail_cropping'),
+          ],
+          'single' => [
+            'width' => get_option('woocommerce_single_image_width'),
+            'height' => get_option('woocommerce_single_image_height'),
+          ],
+        ],
+      ]);
+    }
+
+    return self::$config;
+  }
+
   /**
    * Get all strings
    *

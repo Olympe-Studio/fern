@@ -38,16 +38,7 @@ trait WooCartActions {
       return new Reply(200, [
         'success' => true,
         'cart' => $this->formatCartData(),
-        'config' => [
-          'currency' => get_woocommerce_currency(),
-          'currency_symbol' => get_woocommerce_currency_symbol(),
-          'currency_position' => get_option('woocommerce_currency_pos'),
-          'thousand_separator' => WC_get_price_thousand_separator(),
-          'decimal_separator' => WC_get_price_decimal_separator(),
-          'price_decimals' => WC_get_price_decimals(),
-          'tax_enabled' => WC_tax_enabled(),
-          'calc_taxes' => get_option('woocommerce_calc_taxes'),
-        ],
+        'config' => Woocommerce::getConfig(),
       ]);
     } catch (Exception $e) {
       return new Reply(400, [
@@ -107,15 +98,15 @@ trait WooCartActions {
 
       // Add the new/modified item
       $newKey = $this->getCart()->add_to_cart(
-          $productId,
-          $quantity,
-          $variationId,
-          $variation,
+        $productId,
+        $quantity,
+        $variationId,
+        $variation,
       );
 
       if (!$newKey) {
         throw new Exception(
-            $product->is_type('variable')
+          $product->is_type('variable')
             ? 'Failed to add variation to cart'
             : 'Failed to add product to cart',
         );
@@ -262,10 +253,10 @@ trait WooCartActions {
 
       // Add the new variation
       $newKey = $this->getCart()->add_to_cart(
-          $productId,
-          $quantity,
-          $variationId,
-          $variation,
+        $productId,
+        $quantity,
+        $variationId,
+        $variation,
       );
 
       if (!$newKey) {
@@ -490,8 +481,8 @@ trait WooCartActions {
     }
 
     return array_reduce(
-        array_keys($variation_attributes),
-        function ($acc, $attribute_name) use ($variation_attributes) {
+      array_keys($variation_attributes),
+      function ($acc, $attribute_name) use ($variation_attributes) {
         try {
           $taxonomy = Types::getSafeString(str_replace('pa_', '', $attribute_name));
           $options = $variation_attributes[$attribute_name] ?? [];
@@ -503,8 +494,8 @@ trait WooCartActions {
           $acc[$taxonomy] = [
             'name' => Types::getSafeString(WC_attribute_label($attribute_name)),
             'options' => array_map(
-                fn ($option) => Types::getSafeString(strtolower($option)),
-                $options,
+              fn($option) => Types::getSafeString(strtolower($option)),
+              $options,
             ),
           ];
 
@@ -515,7 +506,7 @@ trait WooCartActions {
           return $acc;
         }
       },
-        [],
+      [],
     );
   }
 
@@ -538,7 +529,7 @@ trait WooCartActions {
    * Validate and sanitize variation data
    */
   protected function validateVariationData(array $variation): array {
-    return array_map(fn ($value) => Types::getSafeString($value), $variation);
+    return array_map(fn($value) => Types::getSafeString($value), $variation);
   }
 
   /**
