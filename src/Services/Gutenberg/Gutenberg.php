@@ -13,7 +13,7 @@ use WP_Block_Type_Registry;
 
 class Gutenberg extends Singleton {
   /**
-   * @var array<string>
+   * @var array<string, int>
    */
   protected $showOnPostTypes;
 
@@ -54,6 +54,16 @@ class Gutenberg extends Singleton {
    * @param string $pt The post type to check
    */
   public function explicitlyShowOnPostTypes(bool $_, string $pt): bool {
+    global $post;
+
+    if ($pt === 'page') {
+      if (!$post) {
+        return false;
+      }
+      return in_array((int) $post->ID, array_map('intval', $this->showOnPostTypes), true);
+    }
+
+
     return in_array($pt, $this->showOnPostTypes, true);
   }
 
@@ -120,7 +130,7 @@ class Gutenberg extends Singleton {
     if (substr($pattern, -2) === '/*') {
       $namespace = substr($pattern, 0, -2);
 
-      return str_starts_with($blockName, $namespace)  ;
+      return str_starts_with($blockName, $namespace);
     }
 
     return $pattern === $blockName;

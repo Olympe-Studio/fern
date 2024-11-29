@@ -1,4 +1,6 @@
-<?php declare(strict_types=1);
+<?php
+
+declare(strict_types=1);
 
 namespace Fern\Core\Services\Mailer;
 
@@ -87,8 +89,7 @@ class Mailer extends Singleton {
       return $mailer;
     });
 
-    Filters::on('wp_mail_from', fn () => $config['from_address']);
-
-    Filters::on('wp_mail_from_name', fn () => $config['from_name']);
+    Filters::on('wp_mail_from', fn() => $config['from_address']);
+    Filters::on('wp_mail_from_name', fn() => $config['from_name']);
   }
 }
