@@ -542,6 +542,10 @@ class Request extends Singleton {
       return get_query_var('post_type') ?: null;
     }
 
+    if (is_page()) {
+      return 'page';
+    }
+
     return null;
   }
 
@@ -692,6 +696,13 @@ class Request extends Singleton {
   }
 
   /**
+   * Check if the current request is for the blog page.
+   */
+  public function isBlog(): bool {
+    return is_home();
+  }
+
+  /**
    * Check if the current request is for any type of archive page.
    */
   public function isArchive(): bool {
@@ -699,6 +710,7 @@ class Request extends Singleton {
       || $this->isTag()
       || $this->isAuthor()
       || $this->isDate()
+      || $this->isBlog()
       || $this->isTax()
       || $this->isPostTypeArchive();
   }
