@@ -1,4 +1,6 @@
-<?php declare(strict_types=1);
+<?php
+
+declare(strict_types=1);
 
 namespace Fern\Core\Services\Controller;
 
@@ -6,6 +8,7 @@ use Fern\Core\Errors\ControllerRegistration;
 use Fern\Core\Factory\Singleton;
 use Fern\Core\Services\HTTP\Request;
 use Fern\Core\Wordpress\Events;
+use Fern\Core\Wordpress\Filters;
 use ReflectionClass;
 
 /**
@@ -134,8 +137,8 @@ class ControllerResolver extends Singleton {
    * @param string $handle The handle of the controller
    */
   public function resolve(string $type, string $handle): string|null {
+    $handle = Filters::apply('fern:core:controller_resolve', $handle, $type);
     $handle = self::PREFIX . $handle;
-
     return $this->controllers[$type][$handle] ?? null;
   }
 
@@ -211,22 +214,22 @@ class ControllerResolver extends Singleton {
     // Register the menu based on whether it's a submenu or top-level menu
     if ($config['parent_slug']) {
       add_submenu_page(
-          $config['parent_slug'],
-          $config['page_title'],
-          $config['menu_title'],
-          $config['capability'],
-          $config['menu_slug'],
-          $callback,
+        $config['parent_slug'],
+        $config['page_title'],
+        $config['menu_title'],
+        $config['capability'],
+        $config['menu_slug'],
+        $callback,
       );
     } else {
       add_menu_page(
-          $config['page_title'],
-          $config['menu_title'],
-          $config['capability'],
-          $config['menu_slug'],
-          $callback,
-          $config['icon'],
-          $config['position'],
+        $config['page_title'],
+        $config['menu_title'],
+        $config['capability'],
+        $config['menu_slug'],
+        $callback,
+        $config['icon'],
+        $config['position'],
       );
 
       // If there are submenu items defined, register them
@@ -244,12 +247,12 @@ class ControllerResolver extends Singleton {
           ], $submenu);
 
           add_submenu_page(
-              $config['menu_slug'],
-              $submenu['page_title'],
-              $submenu['menu_title'],
-              $submenu['capability'],
-              $submenu['menu_slug'],
-              $submenu['callback'],
+            $config['menu_slug'],
+            $submenu['page_title'],
+            $submenu['menu_title'],
+            $submenu['capability'],
+            $submenu['menu_slug'],
+            $submenu['callback'],
           );
         }
       }
