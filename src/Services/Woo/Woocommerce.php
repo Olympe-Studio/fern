@@ -14,15 +14,67 @@ class Woocommerce {
 
   public static array $config = [];
 
+  /**
+   * Locate current WooCommerce page and subpage
+   *
+   * @return array{page: string|null, subPage: string|null}
+   */
+  public static function locate(): array {
+    if (!function_exists('WC')) {
+      return ['page' => null, 'subPage' => null];
+    }
+
+    if (is_shop()) {
+      return ['page' => 'shop', 'subPage' => null];
+    }
+
+    if (is_product()) {
+      return ['page' => 'product', 'subPage' => null];
+    }
+
+    if (is_product_category()) {
+      return ['page' => 'product-category', 'subPage' => null];
+    }
+
+    if (is_cart()) {
+      return ['page' => 'cart', 'subPage' => null];
+    }
+
+    if (is_checkout()) {
+      $endpoint = WC()->query->get_current_endpoint();
+
+      return [
+        'page' => 'checkout',
+        'subPage' => $endpoint ?: null
+      ];
+    }
+
+    if (is_account_page()) {
+      $endpoint = WC()->query->get_current_endpoint();
+
+      return [
+        'page' => 'my-account',
+        'subPage' => $endpoint ?: null
+      ];
+    }
+
+    return ['page' => null, 'subPage' => null];
+  }
+
+  /**
+   * Get the WooCommerce config
+   *
+   * @return array
+   */
   public static function getConfig(): array {
     if (empty(self::$config)) {
       self::$config = Filters::apply('fern:woo:config', [
         // Currency and Price Settings
-        'currency' => get_woocommerce_currency(),
-        'currency_symbol' => get_woocommerce_currency_symbol(),
+        'currency' => html_entity_decode(get_woocommerce_currency(), ENT_QUOTES, 'UTF-8'),
+        'currency_symbol' => html_entity_decode(get_woocommerce_currency_symbol(), ENT_QUOTES, 'UTF-8'),
         'currency_position' => get_option('woocommerce_currency_pos'),
-        'thousand_separator' => WC_get_price_thousand_separator(),
-        'decimal_separator' => WC_get_price_decimal_separator(),
+        'thousand_separator' => html_entity_decode(WC_get_price_thousand_separator(), ENT_QUOTES, 'UTF-8'),
+        'decimal_separator' => html_entity_decode(WC_get_price_decimal_separator(), ENT_QUOTES, 'UTF-8'),
         'price_decimals' => WC_get_price_decimals(),
 
         // Tax Settings
@@ -165,6 +217,7 @@ class Woocommerce {
         'out_of_stock' => __('Out of stock', 'woocommerce'),
         'in_stock' => __('In stock', 'woocommerce'),
         'add_to_cart' => __('Add to cart', 'woocommerce'),
+        'buy_now' => __('Buy now', 'woocommerce'),
         'read_more' => __('Read more', 'woocommerce'),
         'sale' => __('Sale!', 'woocommerce'),
         'new' => __('New!', 'woocommerce'),

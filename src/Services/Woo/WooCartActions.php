@@ -35,6 +35,8 @@ trait WooCartActions {
    */
   public function getInitialState(Request $_): Reply {
     try {
+      $this->calculateCartTotals();
+
       return new Reply(200, [
         'success' => true,
         'cart' => $this->formatCartData(),
@@ -54,6 +56,7 @@ trait WooCartActions {
   public function clearCart(Request $_): Reply {
     try {
       $this->getCart()->empty_cart();
+      $this->calculateCartTotals();
 
       return new Reply(200, [
         'success' => true,
@@ -80,24 +83,25 @@ trait WooCartActions {
     $cartItemKey = $action->get('cart_item_key');
 
     try {
-      $product = Types::getSafeWpValue(WC_get_product($productId));
+      $product = Types::getSafeWpValue(wc_get_product($productId));
+      $cart = $this->getCart();
 
       if ($product === null) {
         throw new Exception('Product not found');
       }
 
       if ($cartItemKey) {
-        $cartItem = Types::getSafeWpValue($this->getCart()->get_cart_item($cartItemKey));
+        $cartItem = Types::getSafeWpValue($cart->get_cart_item($cartItemKey));
 
         if ($cartItem === null) {
           throw new Exception('Cart item not found');
         }
         // Remove old item
-        $this->getCart()->remove_cart_item($cartItemKey);
+        $cart->remove_cart_item($cartItemKey);
       }
 
       // Add the new/modified item
-      $newKey = $this->getCart()->add_to_cart(
+      $newKey = $cart->add_to_cart(
         $productId,
         $quantity,
         $variationId,
@@ -143,6 +147,7 @@ trait WooCartActions {
     }
 
     $success = $this->getCart()->apply_coupon($coupon);
+    $this->calculateCartTotals();
 
     if (!$success) {
       return new Reply(400, [
@@ -165,6 +170,7 @@ trait WooCartActions {
     $action = $request->getAction();
     $coupon = $action->get('coupon');
     $removed = $this->getCart()->remove_coupon($coupon);
+    $this->calculateCartTotals();
 
     if (!$removed) {
       return new Reply(400, [
@@ -196,6 +202,7 @@ trait WooCartActions {
 
     try {
       $removed = $this->getCart()->remove_cart_item($cartItemKey);
+      $this->calculateCartTotals();
 
       if (!$removed) {
         return new Reply(400, [
@@ -225,8 +232,8 @@ trait WooCartActions {
     $cartItemKey = $action->get('cart_item_key');
     $quantity = (int) ($action->get('quantity') ?? 0);
     $variationId = (int) ($action->get('variation_id') ?? 0);
-    $variation = $action->get('variation') ?? [];
     $productId = (int) $action->get('product_id');
+    $variation = $action->get('variation');
 
     try {
       $cartItem = Types::getSafeWpValue($this->getCart()->get_cart_item($cartItemKey));
@@ -258,6 +265,7 @@ trait WooCartActions {
         $variationId,
         $variation,
       );
+      $this->calculateCartTotals();
 
       if (!$newKey) {
         throw new Exception('Failed to update cart item');
@@ -294,6 +302,7 @@ trait WooCartActions {
 
     try {
       $updated = $this->getCart()->set_quantity($cartItemKey, $quantity);
+      $this->calculateCartTotals();
 
       if (!$updated) {
         return new Reply(400, [
@@ -319,10 +328,23 @@ trait WooCartActions {
    * Get current cart contents
    */
   public function getCartContents(Request $request): Reply {
+    $this->calculateCartTotals();
+
     return new Reply(200, [
       'success' => true,
       'cart' => $this->formatCartData(),
     ]);
+  }
+
+  /**
+   * Calculate cart totals
+   */
+  private function calculateCartTotals(): void {
+    $cart = $this->getCart();
+
+    $cart->calculate_shipping();
+    $cart->calculate_fees();
+    $cart->calculate_totals();
   }
 
   /**
@@ -373,7 +395,8 @@ trait WooCartActions {
 
         $product = $cart_item['data'];
         $productId = Types::getSafeInt($cart_item['product_id'] ?? 0);
-        $parent_product = $parent_product = $productId ? Types::getSafeWpValue(WC_get_product($productId)) : null;
+        $variationId = Types::getSafeInt($cart_item['variation_id'] ?? 0);
+        $parent_product = $productId ? Types::getSafeWpValue(wc_get_product($productId)) : null;
 
         $regular_price = Types::getSafeFloat($product->get_regular_price());
         $sale_price = Types::getSafeFloat($product->get_sale_price());
@@ -382,7 +405,7 @@ trait WooCartActions {
         $item = [
           'key' => (string) $cart_item_key,
           'product_id' => $productId,
-          'variation_id' => Types::getSafeInt($cart_item['variation_id'] ?? 0),
+          'variation_id' => $variationId,
           'id' => Types::getSafeInt($product->get_id()),
           'name' => Types::getSafeString($product->get_title()),
           'variation' => $this->validateVariationData($cart_item['variation'] ?? []),
@@ -400,7 +423,7 @@ trait WooCartActions {
           'total' => Utils::formatPrice(Types::getSafeFloat($cart_item['line_total'] ?? 0)),
           'true_total' => Utils::formatPrice(Types::getSafeFloat($cart_item['line_total'] + $cart_item['line_tax'] ?? 0)),
           'image' => $this->getProductImage($product),
-          'meta_data' => Filters::apply('fern:woo:cart_item_meta_data', [], $productId),
+          'meta_data' => Filters::apply('fern:woo:cart_item_meta_data', [], $product, $cart_item),
         ];
 
         if ($parent_product !== null && $parent_product?->is_type('variable')) {
@@ -410,7 +433,6 @@ trait WooCartActions {
         return $item;
       } catch (Exception $e) {
         error_log('Error formatting cart item: ' . $e->getMessage());
-
         return null;
       }
     }, array_keys($cartItems), $cartItems);
@@ -459,8 +481,9 @@ trait WooCartActions {
           ],
           'min_quantity' => Types::getSafeInt($variation['min_qty'] ?? 1),
           'max_quantity' => Types::getSafeInt($variation['max_qty'] ?? -1),
+          'sku' => Types::getSafeString($variation['sku'] ?? ''),
           'is_in_stock' => (bool) ($variation['is_in_stock'] ?? false),
-          'meta_data' => Filters::apply('fern:woo:cart_item_variation_meta_data', [], $variation['variation_id']),
+          'meta_data' => Filters::apply('fern:woo:cart_item_variation_meta_data', [], $variation),
         ];
       } catch (Exception $e) {
         error_log('Error formatting variation: ' . $e->getMessage());
