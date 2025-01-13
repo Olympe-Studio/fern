@@ -116,12 +116,13 @@ class Logger extends Singleton {
       return;
     }
 
-    /** @var string */
-    $timestamp = current_time('mysql');
-    $logEntry = sprintf('[%s - %s]: %s%s', $timestamp, $level, $message, PHP_EOL);
-
-    if (defined('WP_DEBUG') && WP_DEBUG === true) {
-      error_log($logEntry, 3, self::getLogFilePath());
+    try {
+      $timestamp = current_time('mysql');
+      $logEntry = sprintf('[%s - %s]: %s%s', $timestamp, $level, $message, PHP_EOL);
+      @error_log($logEntry, 3, self::getLogFilePath());
+    } catch (\Throwable $e) {
+      // Silently continue if logging fails
+      return;
     }
   }
 }
