@@ -30,7 +30,7 @@
     "pestphp/pest": "3.x-dev",
     "php-stubs/wp-cli-stubs": "dev-master",
     "friendsofphp/php-cs-fixer": "dev-master",
-    "phpstan/phpstan": "2.0.x-dev",
+    "phpstan/phpstan": "2.1.x-dev",
     "szepeviktor/phpstan-wordpress": "2.x-dev",
     "phpstan/extension-installer": "1.4.x-dev"
   },
