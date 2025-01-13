@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Fern\Logger;
 
 use Fern\Core\Config;
+use Fern\Core\Factory\Singleton;
 use Fern\Core\Fern;
 
 /**
@@ -12,7 +13,7 @@ use Fern\Core\Fern;
  *
  * Logs messages to WordPress debug.log or custom log files
  */
-final class Logger {
+class Logger extends Singleton {
   /**
    * Log file path
    *
@@ -58,14 +59,19 @@ final class Logger {
     return $path;
   }
 
+  public static function getLogFilePath(): string {
+    $instance = self::getInstance();
+    return $instance->logFilePath;
+  }
+
   /**
    * Log an error message
    *
    * @param string|\Stringable $message Message to log
    * @return void
    */
-  public function error(string|\Stringable $message): void {
-    $this->log('ERROR', (string) $message);
+  public static function error(string|\Stringable $message): void {
+    self::log('ERROR', (string) $message);
   }
 
   /**
@@ -74,8 +80,8 @@ final class Logger {
    * @param string|\Stringable $message Message to log
    * @return void
    */
-  public function warning(string|\Stringable $message): void {
-    $this->log('WARNING', (string) $message);
+  public static function warning(string|\Stringable $message): void {
+    self::log('WARNING', (string) $message);
   }
 
   /**
@@ -84,8 +90,8 @@ final class Logger {
    * @param string|\Stringable $message Message to log
    * @return void
    */
-  public function info(string|\Stringable $message): void {
-    $this->log('INFO', (string) $message);
+  public static function info(string|\Stringable $message): void {
+    self::log('INFO', (string) $message);
   }
 
   /**
@@ -94,8 +100,8 @@ final class Logger {
    * @param string|\Stringable $message Message to log
    * @return void
    */
-  public function debug(string|\Stringable $message): void {
-    $this->log('DEBUG', (string) $message);
+  public static function debug(string|\Stringable $message): void {
+    self::log('DEBUG', (string) $message);
   }
 
   /**
@@ -105,7 +111,7 @@ final class Logger {
    * @param string $message Message to log
    * @return void
    */
-  private function log(string $level, string $message): void {
+  private static function log(string $level, string $message): void {
     if (empty($message)) {
       return;
     }
@@ -115,7 +121,7 @@ final class Logger {
     $logEntry = sprintf('[%s - %s]: %s%s', $timestamp, $level, $message, PHP_EOL);
 
     if (defined('WP_DEBUG') && WP_DEBUG === true) {
-      error_log($logEntry, 3, $this->logFilePath);
+      error_log($logEntry, 3, self::getLogFilePath());
     }
   }
 }
