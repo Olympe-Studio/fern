@@ -117,7 +117,6 @@ class Router extends Singleton {
 
     if ($this->shouldStop()) {
       Events::trigger('qm/stop', 'fern:resolve_routes');
-
       return;
     }
 
@@ -434,6 +433,7 @@ class Router extends Singleton {
       || $this->request->isAutoSave()
       || $this->request->isCRON()
       || $this->request->isREST()
+      || $this->request->isSitemap()
       || ($this->request->isAjax() && !$this->request->isAction())
       || (is_null(get_queried_object()) && !$this->request->isAction() && !$this->request->is404());;
   }

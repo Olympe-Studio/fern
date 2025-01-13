@@ -654,6 +654,15 @@ class Request extends Singleton {
   }
 
   /**
+   * Determine if the current request is a sitemap.
+   */
+  public function isSitemap(): bool {
+    $url = basename($this->getUrl());
+    return str_contains($url, 'sitemap') && str_ends_with($url, '.xml');
+  }
+
+
+  /**
    * Check if the current request is for a custom taxonomy archive.
    */
   public function isTax(): bool {
