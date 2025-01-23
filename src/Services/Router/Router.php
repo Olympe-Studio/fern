@@ -117,7 +117,6 @@ class Router extends Singleton {
 
     if ($this->shouldStop()) {
       Events::trigger('qm/stop', 'fern:resolve_routes');
-
       return;
     }
 
@@ -178,7 +177,6 @@ class Router extends Singleton {
     }
 
     $id = $this->request->getCurrentId();
-
     if ($id !== -1) {
       /**
        * In the context of multilingual sites, the ID might be an alternate language and we don't want to hardcode everyone of them.
@@ -209,7 +207,6 @@ class Router extends Singleton {
     }
 
     $type = $this->request->isTerm() ? $this->request->getTaxonomy() : $this->request->getPostType();
-
     /**
      * If we are on an archive page, resolve the controller for the archive page using a page ID.
      */
@@ -300,7 +297,7 @@ class Router extends Singleton {
       }
     }
 
-    if ($type === 'post') {
+    if (is_home()) {
       $id = (int) get_option('page_for_posts');
     }
 
@@ -382,9 +379,9 @@ class Router extends Singleton {
   private function canRunAction(string $name, object $controller): bool {
     try {
       $validation = $this->attributeManagerr->validateMethod(
-          $controller,
-          $name,
-          $this->request,
+        $controller,
+        $name,
+        $this->request,
       );
     } catch (AttributeValidationException $e) {
       // Hide the error from the user
@@ -436,6 +433,7 @@ class Router extends Singleton {
       || $this->request->isAutoSave()
       || $this->request->isCRON()
       || $this->request->isREST()
+      || $this->request->isSitemap()
       || ($this->request->isAjax() && !$this->request->isAction())
       || (is_null(get_queried_object()) && !$this->request->isAction() && !$this->request->is404());;
   }
