@@ -12,8 +12,14 @@ class Order {
    * Create order from cart
    * Use this method only if you want to avoid using woocommerce default checkout process.
    * This is not recommended but can be useful in some cases.
+   *
+   * @throws Exception When WooCommerce is not active or cart is empty
    */
   public static function createFromCart(): WC_Order {
+    if (!function_exists('WC')) {
+      throw new Exception('WooCommerce is not installed');
+    }
+
     $cart = WC()->cart;
     $cart->calculate_shipping();
     $cart->calculate_totals();
@@ -23,6 +29,7 @@ class Order {
     }
 
     // Create order
+    /** @phpstan-ignore-next-line */
     $order = wc_create_order();
 
     foreach ($cart->get_cart() as $_ => $cartItem) {

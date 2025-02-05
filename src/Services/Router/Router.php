@@ -117,6 +117,7 @@ class Router extends Singleton {
 
     if ($this->shouldStop()) {
       Events::trigger('qm/stop', 'fern:resolve_routes');
+
       return;
     }
 
@@ -177,6 +178,7 @@ class Router extends Singleton {
     }
 
     $id = $this->request->getCurrentId();
+
     if ($id !== -1) {
       /**
        * In the context of multilingual sites, the ID might be an alternate language and we don't want to hardcode everyone of them.
@@ -207,6 +209,7 @@ class Router extends Singleton {
     }
 
     $type = $this->request->isTerm() ? $this->request->getTaxonomy() : $this->request->getPostType();
+
     /**
      * If we are on an archive page, resolve the controller for the archive page using a page ID.
      */
@@ -255,15 +258,15 @@ class Router extends Singleton {
    */
   private function resolveArchivePage(?string $type, ?string $viewType): ?string {
     $pageId = $this->getArchivePageId($type);
+    $actualViewType = $viewType ?? 'view';
 
     if ($pageId > 0) {
-      $actualViewType = $viewType ?? 'view';
       /** @var class-string<Controller>|null $controller */
       $controller = $this->controllerResolver->resolve($actualViewType, (string) $pageId);
     } else {
       $handle = "archive_{$type}";
       /** @var class-string<Controller>|null $controller */
-      $controller = $this->controllerResolver->resolve($viewType, $handle);
+      $controller = $this->controllerResolver->resolve($actualViewType, $handle);
     }
 
     return $controller;
@@ -379,9 +382,9 @@ class Router extends Singleton {
   private function canRunAction(string $name, object $controller): bool {
     try {
       $validation = $this->attributeManagerr->validateMethod(
-        $controller,
-        $name,
-        $this->request,
+          $controller,
+          $name,
+          $this->request,
       );
     } catch (AttributeValidationException $e) {
       // Hide the error from the user

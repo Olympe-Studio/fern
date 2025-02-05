@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Fern\Core\Services\Wordpress;
 
 use Fern\Core\Config;
+use Fern\Core\Utils\Types;
 use Fern\Core\Wordpress\Events;
 use Fern\Core\Wordpress\Filters;
 use WP_Admin_Bar;
@@ -30,7 +31,9 @@ class Wordpress {
     ob_start();
     wp_head();
 
-    return ob_get_clean();
+    $head = ob_get_clean();
+
+    return Types::getSafeString($head);
   }
 
   /**
@@ -40,7 +43,9 @@ class Wordpress {
     ob_start();
     wp_footer();
 
-    return ob_get_clean();
+    $footer = ob_get_clean();
+
+    return Types::getSafeString($footer);
   }
 
   /**
