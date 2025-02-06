@@ -197,6 +197,7 @@ class Router extends Singleton {
         }
       }
 
+
       if (!is_null($id)) {
         $actualViewType = $viewType ?? 'view';
         /** @var class-string<Controller>|null $idController */
@@ -382,9 +383,9 @@ class Router extends Singleton {
   private function canRunAction(string $name, object $controller): bool {
     try {
       $validation = $this->attributeManagerr->validateMethod(
-          $controller,
-          $name,
-          $this->request,
+        $controller,
+        $name,
+        $this->request,
       );
     } catch (AttributeValidationException $e) {
       // Hide the error from the user
