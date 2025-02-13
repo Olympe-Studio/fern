@@ -17,12 +17,13 @@ class Views {
   /**
    * Render a template
    *
-   * @param string               $template The template to render
-   * @param array<string, mixed> $data     The data to pass to the template
+   * @param string               $template   The template to render
+   * @param array<string, mixed> $data       The data to pass to the template
+   * @param bool                 $doingBlock Whether the render is being done in a block context
    *
    * @throws InvalidArgumentException
    */
-  public static function render(string $template, array $data = [], $doingBlock = false): string {
+  public static function render(string $template, array $data = [], bool $doingBlock = false): string {
     $engine = self::getEngine();
 
     if (!$doingBlock) {

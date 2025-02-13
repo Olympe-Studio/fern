@@ -12,12 +12,6 @@ use Fern\Core\Utils\Types;
 use Fern\Core\Wordpress\Filters;
 use WC_Product;
 use WC_Product_Variable;
-use function WC_attribute_label;
-use function WC_get_price_decimal_separator;
-use function WC_get_price_decimals;
-use function WC_get_price_thousand_separator;
-use function WC_get_product;
-use function WC_tax_enabled;
 
 trait WooCartActions {
   /**
@@ -102,15 +96,15 @@ trait WooCartActions {
 
       // Add the new/modified item
       $newKey = $cart->add_to_cart(
-        $productId,
-        $quantity,
-        $variationId,
-        $variation,
+          $productId,
+          $quantity,
+          $variationId,
+          $variation,
       );
 
       if (!$newKey) {
         throw new Exception(
-          $product->is_type('variable')
+            $product->is_type('variable')
             ? 'Failed to add variation to cart'
             : 'Failed to add product to cart',
         );
@@ -260,10 +254,10 @@ trait WooCartActions {
 
       // Add the new variation
       $newKey = $this->getCart()->add_to_cart(
-        $productId,
-        $quantity,
-        $variationId,
-        $variation,
+          $productId,
+          $quantity,
+          $variationId,
+          $variation,
       );
       $this->calculateCartTotals();
 
@@ -334,17 +328,6 @@ trait WooCartActions {
       'success' => true,
       'cart' => $this->formatCartData(),
     ]);
-  }
-
-  /**
-   * Calculate cart totals
-   */
-  private function calculateCartTotals(): void {
-    $cart = $this->getCart();
-
-    $cart->calculate_shipping();
-    $cart->calculate_fees();
-    $cart->calculate_totals();
   }
 
   /**
@@ -433,6 +416,7 @@ trait WooCartActions {
         return $item;
       } catch (Exception $e) {
         error_log('Error formatting cart item: ' . $e->getMessage());
+
         return null;
       }
     }, array_keys($cartItems), $cartItems);
@@ -504,8 +488,8 @@ trait WooCartActions {
     }
 
     return array_reduce(
-      array_keys($variation_attributes),
-      function ($acc, $attribute_name) use ($variation_attributes) {
+        array_keys($variation_attributes),
+        function ($acc, $attribute_name) use ($variation_attributes) {
         try {
           $taxonomy = Types::getSafeString(str_replace('pa_', '', $attribute_name));
           $options = $variation_attributes[$attribute_name] ?? [];
@@ -517,8 +501,8 @@ trait WooCartActions {
           $acc[$taxonomy] = [
             'name' => Types::getSafeString(WC_attribute_label($attribute_name)),
             'options' => array_map(
-              fn($option) => Types::getSafeString(strtolower($option)),
-              $options,
+                fn($option) => Types::getSafeString(strtolower($option)),
+                $options,
             ),
           ];
 
@@ -529,7 +513,7 @@ trait WooCartActions {
           return $acc;
         }
       },
-      [],
+        [],
     );
   }
 
@@ -580,20 +564,36 @@ trait WooCartActions {
   }
 
   /**
-   * Get the WooCommerce cart instance
-   *
-   * @return WC_Cart|never
+   * Calculate cart totals
    */
-  private function getCart(): WC_Cart {
-    if (!class_exists('\WC_Cart')) {
-      $reply = new Reply(400, [
-        'success' => false,
-        'error' => 'WooCommerce is not installed',
-      ]);
-      $reply->contentType('application/json');
-      $reply->send();
-    }
+  private function calculateCartTotals(): void {
+    $cart = $this->getCart();
 
-    return WC()->cart;
+    $cart->calculate_shipping();
+    $cart->calculate_fees();
+    $cart->calculate_totals();
+  }
+
+    /**
+     * Get the WooCommerce cart instance
+     *
+     * @throws Exception When WooCommerce is not installed
+     */
+    private function getCart(): WC_Cart {
+      if (!class_exists('\WC_Cart')) {
+          throw new Exception('WooCommerce is not installed');
+      }
+
+      if (!function_exists('WC')) {
+          throw new Exception('WooCommerce function WC() not found');
+      }
+
+      $wc = WC();
+
+      if (!$wc || !$wc->cart instanceof WC_Cart) {
+          throw new Exception('Invalid WooCommerce cart instance');
+      }
+
+      return $wc->cart;
   }
 }

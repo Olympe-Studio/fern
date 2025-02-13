@@ -15,7 +15,7 @@ class TheSeoFramework implements SEOIntegration {
       ob_start();
       $tsf = tsf();
       // title is not included in the meta tags
-      echo "<title>" . html_entity_decode(\The_SEO_Framework\Front\Title::set_document_title(), ENT_QUOTES | ENT_HTML5, 'UTF-8') . "</title>";
+      echo '<title>' . html_entity_decode(\The_SEO_Framework\Front\Title::set_document_title(), ENT_QUOTES | ENT_HTML5, 'UTF-8') . '</title>';
       $tsf->print_seo_meta_tags();
 
       return ob_get_clean() ?: '';

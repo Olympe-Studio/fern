@@ -7,6 +7,10 @@ namespace Fern\Core\Logger;
 use Fern\Core\Config;
 use Fern\Core\Factory\Singleton;
 use Fern\Core\Fern;
+use JsonException;
+use RuntimeException;
+use Stringable;
+use Throwable;
 
 /**
  * Simple WordPress File Logger
@@ -16,15 +20,13 @@ use Fern\Core\Fern;
 class Logger extends Singleton {
   /**
    * Log file path
-   *
-   * @var string
    */
   private string $logFilePath;
 
   /**
    * Constructor
    *
-   * @throws \RuntimeException If unable to create log directory
+   * @throws RuntimeException If unable to create log directory
    */
   public function __construct() {
     /** @var string|null */
@@ -35,8 +37,7 @@ class Logger extends Singleton {
   /**
    * Get the log folder
    *
-   * @throws \RuntimeException If unable to create log directory
-   * @return string
+   * @throws RuntimeException If unable to create log directory
    */
   public static function getLogFolder(): string {
     /** @var bool|string */
@@ -51,8 +52,8 @@ class Logger extends Singleton {
       : rtrim($path, '/');
 
     if (!is_dir($path) && !mkdir($path, 0777, true) && !is_dir($path)) {
-      throw new \RuntimeException(
-        sprintf('Directory "%s" was not created', $path)
+      throw new RuntimeException(
+          sprintf('Directory "%s" was not created', $path),
       );
     }
 
@@ -61,50 +62,47 @@ class Logger extends Singleton {
 
   public static function getLogFilePath(): string {
     $instance = self::getInstance();
+
     return $instance->logFilePath;
   }
 
   /**
    * Log an error message
    *
-   * @param string|\Stringable $message Message to log
-   * @param mixed ...$context Additional context data
-   * @return void
+   * @param string|Stringable $message    Message to log
+   * @param mixed             ...$context Additional context data
    */
-  public static function error(string|\Stringable $message, mixed ...$context): void {
+  public static function error(string|Stringable $message, mixed ...$context): void {
     self::log('ERROR', (string) $message, ...$context);
   }
 
   /**
    * Log a warning message
    *
-   * @param string|\Stringable $message Message to log
-   * @param mixed ...$context Additional context data
-   * @return void
+   * @param string|Stringable $message    Message to log
+   * @param mixed             ...$context Additional context data
    */
-  public static function warning(string|\Stringable $message, mixed ...$context): void {
+  public static function warning(string|Stringable $message, mixed ...$context): void {
     self::log('WARNING', (string) $message, ...$context);
   }
 
   /**
    * Log an info message
    *
-   * @param string|\Stringable $message Message to log
-   * @param mixed ...$context Additional context data
-   * @return void
+   * @param string|Stringable $message    Message to log
+   * @param mixed             ...$context Additional context data
    */
-  public static function info(string|\Stringable $message, mixed ...$context): void {
+  public static function info(string|Stringable $message, mixed ...$context): void {
     self::log('INFO', (string) $message, ...$context);
   }
 
   /**
    * Log a debug message
    *
-   * @param string|\Stringable $message Message to log
-   * @param mixed ...$context Additional context data
-   * @return void
+   * @param string|Stringable $message    Message to log
+   * @param mixed             ...$context Additional context data
    */
-  public static function debug(string|\Stringable $message, mixed ...$context): void {
+  public static function debug(string|Stringable $message, mixed ...$context): void {
     self::log('DEBUG', (string) $message, ...$context);
   }
 
@@ -112,6 +110,7 @@ class Logger extends Singleton {
    * Format context data for logging
    *
    * @param mixed ...$context Context data to format
+   *
    * @return string
    */
   private static function formatContext(mixed ...$context): string {
@@ -129,18 +128,18 @@ class Logger extends Singleton {
 
     try {
       return ' Context: ' . json_encode($contextData, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-    } catch (\JsonException $e) {
-      return ' Context: Error encoding context data';
+    } catch (JsonException $e) {
+      @error_log('Error encoding context data: ' . $e->getMessage());
+      throw $e;
     }
   }
 
   /**
    * Main logging function
    *
-   * @param string $level Log level
-   * @param string $message Message to log
-   * @param mixed ...$context Additional context data
-   * @return void
+   * @param string $level      Log level
+   * @param string $message    Message to log
+   * @param mixed  ...$context Additional context data
    */
   private static function log(string $level, string $message, mixed ...$context): void {
     if (empty($message)) {
@@ -152,7 +151,7 @@ class Logger extends Singleton {
       $contextStr = self::formatContext(...$context);
       $logEntry = sprintf('[%s - %s]: %s%s%s', $timestamp, $level, $message, $contextStr, PHP_EOL);
       @error_log($logEntry, 3, self::getLogFilePath());
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
       // Silently continue if logging fails
       return;
     }
