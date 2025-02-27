@@ -13,9 +13,8 @@ use WP_Block_Type_Registry;
 
 class Gutenberg extends Singleton {
   /**
-   * @var array<string, int>
-   */
-  protected $showOnPostTypes;
+ * @var array<string|int>
+   */ protected $showOnPostTypes;
 
   /**
    * @var array<string|int, string>
@@ -60,9 +59,14 @@ class Gutenberg extends Singleton {
       if (!$post) {
         return false;
       }
-      return in_array((int) $post->ID, array_map('intval', $this->showOnPostTypes), true);
-    }
 
+      $postId = (int) $post->ID;
+      $pageIds = array_filter($this->showOnPostTypes, function($value) {
+        return is_numeric($value) && (int) $value > 0;
+      });
+
+      return in_array((string)$postId, $pageIds, true);
+    }
 
     return in_array($pt, $this->showOnPostTypes, true);
   }

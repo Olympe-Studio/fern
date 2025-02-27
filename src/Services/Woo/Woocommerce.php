@@ -6,13 +6,60 @@ namespace Fern\Core\Services\Woo;
 
 use Fern\Core\Wordpress\Filters;
 
+/**
+ * @phpstan-type WooConfig array{
+ *   currency: string,
+ *   currency_symbol: string,
+ *   currency_position: string,
+ *   thousand_separator: string,
+ *   decimal_separator: string,
+ *   price_decimals: int,
+ *   tax_enabled: bool,
+ *   calc_taxes: string,
+ *   tax_display_shop: string,
+ *   tax_display_cart: string,
+ *   prices_include_tax: string,
+ *   cart_page_url: string,
+ *   checkout_page_url: string,
+ *   account_page_url: string,
+ *   shop_page_url: string,
+ *   terms_page_url: string,
+ *   store_address: string,
+ *   store_city: string,
+ *   store_postcode: string,
+ *   store_country: string,
+ *   weight_unit: string,
+ *   dimension_unit: string,
+ *   products_per_page: int,
+ *   catalog_orderby: string,
+ *   review_ratings_enabled: string,
+ *   manage_stock: string,
+ *   stock_format: string,
+ *   notify_low_stock: string,
+ *   notify_no_stock: string,
+ *   low_stock_amount: int,
+ *   enable_guest_checkout: string,
+ *   enable_checkout_login_reminder: string,
+ *   enable_signup_and_login_from_checkout: string,
+ *   enable_myaccount_registration: string,
+ *   admin_email: string,
+ *   email_from_name: string,
+ *   email_from_address: string,
+ *   downloads_require_login: string,
+ *   downloads_grant_access_after_payment: string,
+ *   image_sizes: array{
+ *     thumbnail: array{width: int, height: int, crop: string},
+ *     single: array{width: int, height: int}
+ *   }
+ * }
+ * @phpstan-type WooTexts array<string, array<string, string>>
+ */
 class Woocommerce {
-  /**
-   * Store all strings statically
-   */
-  private static array $strings = [];
-
+  /** @var array<string, mixed> */
   public static array $config = [];
+
+  /** @var array<string, array<string, string>> */
+  private static array $strings = [];
 
   /**
    * Locate current WooCommerce page and subpage
@@ -24,37 +71,43 @@ class Woocommerce {
       return ['page' => null, 'subPage' => null];
     }
 
+    /** @phpstan-ignore-next-line */
     if (is_shop()) {
       return ['page' => 'shop', 'subPage' => null];
     }
 
+    /** @phpstan-ignore-next-line */
     if (is_product()) {
       return ['page' => 'product', 'subPage' => null];
     }
 
+    /** @phpstan-ignore-next-line */
     if (is_product_category()) {
       return ['page' => 'product-category', 'subPage' => null];
     }
 
+    /** @phpstan-ignore-next-line */
     if (is_cart()) {
       return ['page' => 'cart', 'subPage' => null];
     }
 
+    /** @phpstan-ignore-next-line */
     if (is_checkout()) {
       $endpoint = WC()->query->get_current_endpoint();
 
       return [
         'page' => 'checkout',
-        'subPage' => $endpoint ?: null
+        'subPage' => $endpoint ?: null,
       ];
     }
 
+    /** @phpstan-ignore-next-line */
     if (is_account_page()) {
       $endpoint = WC()->query->get_current_endpoint();
 
       return [
         'page' => 'my-account',
-        'subPage' => $endpoint ?: null
+        'subPage' => $endpoint ?: null,
       ];
     }
 
@@ -64,20 +117,35 @@ class Woocommerce {
   /**
    * Get the WooCommerce config
    *
-   * @return array
+   * @return array<string, mixed>
    */
   public static function getConfig(): array {
+    if (!function_exists('WC')) {
+      return [];
+    }
+
     if (empty(self::$config)) {
       self::$config = Filters::apply('fern:woo:config', [
         // Currency and Price Settings
+
+        /** @phpstan-ignore-next-line */
         'currency' => html_entity_decode(get_woocommerce_currency(), ENT_QUOTES, 'UTF-8'),
+
+        /** @phpstan-ignore-next-line */
         'currency_symbol' => html_entity_decode(get_woocommerce_currency_symbol(), ENT_QUOTES, 'UTF-8'),
         'currency_position' => get_option('woocommerce_currency_pos'),
+
+        /** @phpstan-ignore-next-line */
         'thousand_separator' => html_entity_decode(WC_get_price_thousand_separator(), ENT_QUOTES, 'UTF-8'),
+
+        /** @phpstan-ignore-next-line */
         'decimal_separator' => html_entity_decode(WC_get_price_decimal_separator(), ENT_QUOTES, 'UTF-8'),
+
+        /** @phpstan-ignore-next-line */
         'price_decimals' => WC_get_price_decimals(),
 
         // Tax Settings
+        /** @phpstan-ignore-next-line */
         'tax_enabled' => WC_tax_enabled(),
         'calc_taxes' => get_option('woocommerce_calc_taxes'),
         'tax_display_shop' => get_option('woocommerce_tax_display_shop'),
@@ -85,9 +153,13 @@ class Woocommerce {
         'prices_include_tax' => get_option('woocommerce_prices_include_tax'),
 
         // Important Pages
+        /** @phpstan-ignore-next-line */
         'cart_page_url' => wc_get_cart_url(),
+        /** @phpstan-ignore-next-line */
         'checkout_page_url' => wc_get_checkout_url(),
+        /** @phpstan-ignore-next-line */
         'account_page_url' => wc_get_account_endpoint_url('dashboard'),
+        /** @phpstan-ignore-next-line */
         'shop_page_url' => get_permalink(wc_get_page_id('shop')),
         'terms_page_url' => get_permalink(get_option('woocommerce_terms_page_id')),
 
@@ -147,9 +219,9 @@ class Woocommerce {
   /**
    * Get all strings
    *
-   * @return array
+   * @return array<string, array<string, string>>
    */
-  public static function getTexts() {
+  public static function getTexts(): array {
     if (empty(self::$strings)) {
       self::$strings = self::initStrings();
     }
@@ -160,8 +232,8 @@ class Woocommerce {
   /**
    * Get text string using dot notation
    *
-   * @param string $key     Dot notation key (e.g., 'cart.empty_cart')
-   * @param string $default The default value if the key is not found
+   * @param string      $key     Dot notation key (e.g., 'cart.empty_cart')
+   * @param string|null $default The default value if the key is not found
    *
    * @return string|null The text string or default value if not found
    */
@@ -177,7 +249,7 @@ class Woocommerce {
       $value = $value[$subKey];
     }
 
-    return $value;
+    return is_string($value) ? $value : $default;
   }
 
   /**
@@ -185,9 +257,9 @@ class Woocommerce {
    *
    * @param string $section Section name (e.g., 'cart', 'checkout')
    *
-   * @return array|null Array of strings or null if section not found
+   * @return array<string, string>|null Array of strings or null if section not found
    */
-  public static function getSection($section) {
+  public static function getSection(string $section): ?array {
     $strs = self::getTexts();
 
     return isset($strs[$section]) ? $strs[$section] : null;
@@ -196,7 +268,7 @@ class Woocommerce {
   /**
    * Init the Woocommerce strings
    *
-   * @return array
+   * @return array<string, array<string, string>>
    */
   private static function initStrings() {
     return Filters::apply('fern:woo:texts', [
@@ -262,7 +334,6 @@ class Woocommerce {
         'coupon_applied' => __('Coupon code applied successfully.', 'woocommerce'),
         'coupon_removed' => __('Coupon removed successfully.', 'woocommerce'),
         'total' => __('Total', 'woocommerce'),
-        'subtotal' => __('Subtotal', 'woocommerce'),
         'shipping_total' => __('Shipping', 'woocommerce'),
         'tax_total' => __('Tax', 'woocommerce'),
       ],
@@ -306,7 +377,6 @@ class Woocommerce {
         'invalid_card' => __('Please enter a valid card number.', 'woocommerce'),
         'invalid_cvv' => __('Please enter a valid security code.', 'woocommerce'),
         'invalid_expiry' => __('Please enter a valid expiry date.', 'woocommerce'),
-        'invalid_coupon' => __('Coupon is not valid.', 'woocommerce'),
         'expired_coupon' => __('This coupon has expired.', 'woocommerce'),
         'removing_coupon' => __('Sorry there was a problem removing this coupon.', 'woocommerce'),
         'already_applied' => __('Coupon code already applied.', 'woocommerce'),

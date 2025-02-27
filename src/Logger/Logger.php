@@ -7,6 +7,10 @@ namespace Fern\Core\Logger;
 use Fern\Core\Config;
 use Fern\Core\Factory\Singleton;
 use Fern\Core\Fern;
+use JsonException;
+use RuntimeException;
+use Stringable;
+use Throwable;
 
 /**
  * Simple WordPress File Logger
@@ -15,28 +19,48 @@ use Fern\Core\Fern;
  */
 class Logger extends Singleton {
   /**
+   * Default log file name
+   */
+  private const DEFAULT_LOG_FILE = 'debug.log';
+
+  /**
    * Log file path
-   *
-   * @var string
    */
   private string $logFilePath;
 
   /**
+   * Log file name
+   */
+  private string $logFileName;
+
+  /**
    * Constructor
    *
-   * @throws \RuntimeException If unable to create log directory
+   * @param string $logFileName The name of the log file. Defaults to 'debug.log'.
+   * @throws RuntimeException If unable tocreate log directory
    */
-  public function __construct() {
-    /** @var string|null */
-    $configPath = Config::get('debug.log_file_path');
-    $this->logFilePath = $configPath ?? self::getLogFolder() . '/debug.log';
+  public function __construct(string $logFileName = self::DEFAULT_LOG_FILE) {
+    $this->setLogFileName($logFileName);
+  }
+
+  /**
+   * Set the log file name
+   *
+   * @param string $logFileName The name of the log file.
+   */
+  private function setLogFileName(string $logFileName = self::DEFAULT_LOG_FILE): void {
+    $logFileName = (empty($logFileName) || !is_string($logFileName))
+      ? self::DEFAULT_LOG_FILE
+      : $logFileName;
+
+    $this->logFileName = $logFileName;
+    $this->logFilePath = self::getLogFolder() . '/' . $this->logFileName;
   }
 
   /**
    * Get the log folder
    *
-   * @throws \RuntimeException If unable to create log directory
-   * @return string
+   * @throws RuntimeException If unable to create log directory
    */
   public static function getLogFolder(): string {
     /** @var bool|string */
@@ -51,8 +75,8 @@ class Logger extends Singleton {
       : rtrim($path, '/');
 
     if (!is_dir($path) && !mkdir($path, 0777, true) && !is_dir($path)) {
-      throw new \RuntimeException(
-        sprintf('Directory "%s" was not created', $path)
+      throw new RuntimeException(
+        sprintf('Directory "%s" was not created', $path),
       );
     }
 
@@ -61,50 +85,47 @@ class Logger extends Singleton {
 
   public static function getLogFilePath(): string {
     $instance = self::getInstance();
+
     return $instance->logFilePath;
   }
 
   /**
    * Log an error message
    *
-   * @param string|\Stringable $message Message to log
-   * @param mixed ...$context Additional context data
-   * @return void
+   * @param string|Stringable $message    Message to log
+   * @param mixed             ...$context Additional context data
    */
-  public static function error(string|\Stringable $message, mixed ...$context): void {
+  public static function error(string|Stringable $message, mixed ...$context): void {
     self::log('ERROR', (string) $message, ...$context);
   }
 
   /**
    * Log a warning message
    *
-   * @param string|\Stringable $message Message to log
-   * @param mixed ...$context Additional context data
-   * @return void
+   * @param string|Stringable $message    Message to log
+   * @param mixed             ...$context Additional context data
    */
-  public static function warning(string|\Stringable $message, mixed ...$context): void {
+  public static function warning(string|Stringable $message, mixed ...$context): void {
     self::log('WARNING', (string) $message, ...$context);
   }
 
   /**
    * Log an info message
    *
-   * @param string|\Stringable $message Message to log
-   * @param mixed ...$context Additional context data
-   * @return void
+   * @param string|Stringable $message    Message to log
+   * @param mixed             ...$context Additional context data
    */
-  public static function info(string|\Stringable $message, mixed ...$context): void {
+  public static function info(string|Stringable $message, mixed ...$context): void {
     self::log('INFO', (string) $message, ...$context);
   }
 
   /**
    * Log a debug message
    *
-   * @param string|\Stringable $message Message to log
-   * @param mixed ...$context Additional context data
-   * @return void
+   * @param string|Stringable $message    Message to log
+   * @param mixed             ...$context Additional context data
    */
-  public static function debug(string|\Stringable $message, mixed ...$context): void {
+  public static function debug(string|Stringable $message, mixed ...$context): void {
     self::log('DEBUG', (string) $message, ...$context);
   }
 
@@ -112,6 +133,7 @@ class Logger extends Singleton {
    * Format context data for logging
    *
    * @param mixed ...$context Context data to format
+   *
    * @return string
    */
   private static function formatContext(mixed ...$context): string {
@@ -129,18 +151,18 @@ class Logger extends Singleton {
 
     try {
       return ' Context: ' . json_encode($contextData, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-    } catch (\JsonException $e) {
-      return ' Context: Error encoding context data';
+    } catch (JsonException $e) {
+      @error_log('Error encoding context data: ' . $e->getMessage());
+      throw $e;
     }
   }
 
   /**
    * Main logging function
    *
-   * @param string $level Log level
-   * @param string $message Message to log
-   * @param mixed ...$context Additional context data
-   * @return void
+   * @param string $level      Log level
+   * @param string $message    Message to log
+   * @param mixed  ...$context Additional context data
    */
   private static function log(string $level, string $message, mixed ...$context): void {
     if (empty($message)) {
@@ -152,9 +174,24 @@ class Logger extends Singleton {
       $contextStr = self::formatContext(...$context);
       $logEntry = sprintf('[%s - %s]: %s%s%s', $timestamp, $level, $message, $contextStr, PHP_EOL);
       @error_log($logEntry, 3, self::getLogFilePath());
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
       // Silently continue if logging fails
       return;
     }
+  }
+
+  /**
+   * Use a specific log file for subsequent logging calls.
+   *
+   * @param string|null $logFileName The name of the log file to use.  If null or 'default', uses the default log file.
+   * @return void
+   */
+  public static function useLogger(?string $logFileName = null): void {
+    if (is_null($logFileName) || $logFileName === 'default') {
+      $logFileName = self::DEFAULT_LOG_FILE;
+    }
+
+    $logger = self::getInstance();
+    $logger->setLogFileName($logFileName);
   }
 }

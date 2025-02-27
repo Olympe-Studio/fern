@@ -52,11 +52,12 @@ class Action {
    * Gets an argument from the Action request.
    *
    * @param string $argument The argument key.
+   * @param mixed $default The default value.
    *
    * @return mixed The argument value
    */
-  public function get(string $argument): mixed {
-    return $this->args[$argument] ?? null;
+  public function get(string $argument, mixed $default = null): mixed {
+    return $this->args[$argument] ?? $default;
   }
 
   /**

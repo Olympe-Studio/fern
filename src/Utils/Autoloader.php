@@ -134,10 +134,8 @@ PHP . PHP_EOL;
     $root = Fern::getRoot();
     $appPath = trailingslashit($root) . 'App';
 
-    return self::getFilesRecursively($appPath, function ($fileInfo) {
-      return $fileInfo->isFile()
+    return self::getFilesRecursively($appPath, fn ($fileInfo) => $fileInfo->isFile()
         && $fileInfo->getExtension() === 'php'
-        && str_starts_with($fileInfo->getFilename(), '_')  ;
-    });
+        && str_starts_with($fileInfo->getFilename(), '_')  );
   }
 }

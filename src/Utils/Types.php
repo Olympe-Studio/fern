@@ -1,18 +1,25 @@
-<?php declare(strict_types=1);
+<?php
+
+declare(strict_types=1);
 
 namespace Fern\Core\Utils;
+
+use RuntimeException;
+use WP_Error;
 
 class Types {
   /**
    * Convert WordPress return values to either the real value or null
    * Handles WP_Error, false, empty strings, and other WordPress empty states
    *
-   * @param mixed $value The value to check
+   * @template T
    *
-   * @return mixed|null Returns null for empty/error states, real value otherwise
+   * @param T $value The value to check
+   *
+   * @return (T is WP_Error ? null : (T is array<mixed> ? (array<mixed>|null) : (T|null)))
    */
-  public static function getSafeWpValue($value): mixed {
-    if (is_wp_error($value)) {
+  public static function getSafeWpValue(mixed $value): mixed {
+    if ($value instanceof WP_Error) {
       return null;
     }
 
@@ -34,37 +41,29 @@ class Types {
 
   /**
    * Safe float conversion
-   *
-   * @param mixed $value
    */
-  public static function getSafeFloat($value): float {
+  public static function getSafeFloat(float|int|string|null $value): float {
     return (float) ($value ?? 0);
   }
 
   /**
    * Safe integer conversion
-   *
-   * @param mixed $value
    */
-  public static function getSafeInt($value): int {
+  public static function getSafeInt(float|int|string|null $value): int {
     return (int) ($value ?? 0);
   }
 
   /**
    * Safe string conversion
-   *
-   * @param mixed $value
    */
-  public static function getSafeString($value): string {
+  public static function getSafeString(mixed $value): string {
     return (string) ($value ?? '');
   }
 
   /**
    * Safe boolean conversion
-   *
-   * @param mixed $value
    */
-  public static function getSafeBool($value): bool {
+  public static function getSafeBool(mixed $value): bool {
     if (is_string($value)) {
       return in_array(strtolower($value), ['true', '1', 'yes', 'on'], true);
     }
@@ -75,10 +74,14 @@ class Types {
   /**
    * Safe array conversion
    *
-   * @param mixed $value
+   * @template T
+   *
+   * @param T|array<T>|null $value
+   *
+   * @return array<int, T>
    */
-  public static function getSafeArray($value): array {
-    if (is_null($value)) {
+  public static function getSafeArray(mixed $value): array {
+    if ($value === null) {
       return [];
     }
 
@@ -87,36 +90,46 @@ class Types {
 
   /**
    * Get safe email (returns empty string if invalid)
-   *
-   * @param mixed $value
    */
-  public static function getSafeEmail($value): string {
+  public static function getSafeEmail(mixed $value): string {
     $email = self::getSafeString($value);
+    $validEmail = filter_var($email, FILTER_VALIDATE_EMAIL);
 
-    return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : '';
+    return is_string($validEmail) ? $email : '';
   }
 
   /**
    * Get safe URL (returns empty string if invalid)
-   *
-   * @param mixed $value
    */
-  public static function getSafeUrl($value): string {
+  public static function getSafeUrl(mixed $value): string {
     $url = self::getSafeString($value);
+    $validUrl = filter_var($url, FILTER_VALIDATE_URL);
 
-    return filter_var($url, FILTER_VALIDATE_URL) ? $url : '';
+    return is_string($validUrl) ? $url : '';
   }
 
   /**
    * Get safe slug (URL friendly string)
    *
-   * @param mixed $value
+   * @throws RuntimeException If preg_replace returns null
    */
-  public static function getSafeSlug($value): string {
+  public static function getSafeSlug(mixed $value): string {
     $string = self::getSafeString($value);
-    $string = preg_replace('/[^a-zA-Z0-9\s-]/', '', $string);
-    $string = strtolower(trim($string));
 
-    return preg_replace('/[\s-]+/', '-', $string);
+    $withoutSpecialChars = preg_replace('/[^a-zA-Z0-9\s-]/', '', $string);
+
+    if ($withoutSpecialChars === null) {
+      throw new RuntimeException('Failed to process string for slug');
+    }
+
+    $lowercased = strtolower(trim($withoutSpecialChars));
+
+    $slug = preg_replace('/[\s-]+/', '-', $lowercased);
+
+    if ($slug === null) {
+      throw new RuntimeException('Failed to process string for slug');
+    }
+
+    return $slug;
   }
 }
