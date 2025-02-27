@@ -19,19 +19,42 @@ use Throwable;
  */
 class Logger extends Singleton {
   /**
+   * Default log file name
+   */
+  private const DEFAULT_LOG_FILE = 'debug.log';
+
+  /**
    * Log file path
    */
   private string $logFilePath;
 
   /**
+   * Log file name
+   */
+  private string $logFileName;
+
+  /**
    * Constructor
    *
-   * @throws RuntimeException If unable to create log directory
+   * @param string $logFileName The name of the log file. Defaults to 'debug.log'.
+   * @throws RuntimeException If unable tocreate log directory
    */
-  public function __construct() {
-    /** @var string|null */
-    $configPath = Config::get('debug.log_file_path');
-    $this->logFilePath = $configPath ?? self::getLogFolder() . '/debug.log';
+  public function __construct(string $logFileName = self::DEFAULT_LOG_FILE) {
+    $this->setLogFileName($logFileName);
+  }
+
+  /**
+   * Set the log file name
+   *
+   * @param string $logFileName The name of the log file.
+   */
+  private function setLogFileName(string $logFileName = self::DEFAULT_LOG_FILE): void {
+    $logFileName = (empty($logFileName) || !is_string($logFileName))
+      ? self::DEFAULT_LOG_FILE
+      : $logFileName;
+
+    $this->logFileName = $logFileName;
+    $this->logFilePath = self::getLogFolder() . '/' . $this->logFileName;
   }
 
   /**
@@ -53,7 +76,7 @@ class Logger extends Singleton {
 
     if (!is_dir($path) && !mkdir($path, 0777, true) && !is_dir($path)) {
       throw new RuntimeException(
-          sprintf('Directory "%s" was not created', $path),
+        sprintf('Directory "%s" was not created', $path),
       );
     }
 
@@ -155,5 +178,20 @@ class Logger extends Singleton {
       // Silently continue if logging fails
       return;
     }
+  }
+
+  /**
+   * Use a specific log file for subsequent logging calls.
+   *
+   * @param string|null $logFileName The name of the log file to use.  If null or 'default', uses the default log file.
+   * @return void
+   */
+  public static function useLogger(?string $logFileName = null): void {
+    if (is_null($logFileName) || $logFileName === 'default') {
+      $logFileName = self::DEFAULT_LOG_FILE;
+    }
+
+    $logger = self::getInstance();
+    $logger->setLogFileName($logFileName);
   }
 }
