@@ -51,6 +51,10 @@ class Router extends Singleton {
   private AttributesManager $attributeManagerr;
 
   /**
+   */
+  public bool $didPass;
+
+  /**
    * @phpstan-var RouterConfig
    */
   private array $config;
@@ -60,6 +64,7 @@ class Router extends Singleton {
     $this->config = Config::get('core.routes');
     $this->controllerResolver = ControllerResolver::getInstance();
     $this->attributeManagerr = AttributesManager::getInstance();
+    $this->didPass = false;
   }
 
   /**
@@ -69,6 +74,13 @@ class Router extends Singleton {
    */
   public function getConfig(): array {
     return $this->config;
+  }
+
+  /**
+   * Checks if the router has passed
+   */
+  public static function passed(): bool {
+    return Router::getInstance()->didPass;
   }
 
   /**
@@ -115,9 +127,10 @@ class Router extends Singleton {
     Events::trigger('qm/start', 'fern:resolve_routes');
     $req = $this->request;
 
+    // Pass back to WP.
     if ($this->shouldStop()) {
       Events::trigger('qm/stop', 'fern:resolve_routes');
-
+      $this->didPass = true;
       return;
     }
 
@@ -138,6 +151,8 @@ class Router extends Singleton {
       if ($req->isPost() && $req->isAction()) {
         $this->handleActionRequest($controller);
       }
+    } else {
+      $this->didPass = true;
     }
   }
 

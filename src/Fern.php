@@ -32,6 +32,13 @@ class Fern extends Singleton {
   /**
    * Checks if the current environment is development
    */
+  public static function passed(): bool {
+    return Router::passed();
+  }
+
+  /**
+   * Checks if the current environment is development
+   */
   public static function isDev(): bool {
     return defined('WP_ENV') && WP_ENV === 'development';
   }
