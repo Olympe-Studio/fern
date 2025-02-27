@@ -78,10 +78,10 @@ class Reply {
    */
   public static function fromArray(array $data): Reply {
     $reply = new self(
-        $data['status'] ?? 200,
-        self::unserializeBody($data['body'] ?? ''),
-        $data['content_type'] ?? 'text/html',
-        $data['headers'] ?? [],
+      $data['status'] ?? 200,
+      self::unserializeBody($data['body'] ?? ''),
+      $data['content_type'] ?? 'text/html',
+      $data['headers'] ?? [],
     );
 
     if (isset($data['trailers'])) {
@@ -397,6 +397,7 @@ class Reply {
       $this->setHeader('X-FERN-ACTION-REPLY', true);
     }
 
+    Filters::apply('fern:core:reply:headers', $this);
     $this->applyHeaders();
 
     if (!headers_sent()) {
