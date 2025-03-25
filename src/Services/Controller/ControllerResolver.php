@@ -29,6 +29,9 @@ class ControllerResolver extends Singleton {
   /** @var string Constant for admin type controllers */
   private const TYPE_ADMIN = 'admin';
 
+  /** @var string Constant for widget type controllers */
+  private const TYPE_WIDGET = 'widget';
+
   /** @var string Constant for default type controller */
   private const TYPE_DEFAULT = 'default';
 
@@ -42,6 +45,7 @@ class ControllerResolver extends Singleton {
     $this->controllers = [
       self::TYPE_VIEW => [],
       self::TYPE_ADMIN => [],
+      self::TYPE_WIDGET => [],
       self::TYPE_DEFAULT => null,
       self::TYPE_404 => null,
     ];
@@ -215,22 +219,22 @@ class ControllerResolver extends Singleton {
     // Register the menu based on whether it's a submenu or top-level menu
     if ($config['parent_slug']) {
       add_submenu_page(
-          $config['parent_slug'],
-          $config['page_title'],
-          $config['menu_title'],
-          $config['capability'],
-          $config['menu_slug'],
-          $callback,
+        $config['parent_slug'],
+        $config['page_title'],
+        $config['menu_title'],
+        $config['capability'],
+        $config['menu_slug'],
+        $callback,
       );
     } else {
       add_menu_page(
-          $config['page_title'],
-          $config['menu_title'],
-          $config['capability'],
-          $config['menu_slug'],
-          $callback,
-          $config['icon'],
-          $config['position'],
+        $config['page_title'],
+        $config['menu_title'],
+        $config['capability'],
+        $config['menu_slug'],
+        $callback,
+        $config['icon'],
+        $config['position'],
       );
 
       // If there are submenu items defined, register them
@@ -248,12 +252,12 @@ class ControllerResolver extends Singleton {
           ], $submenu);
 
           add_submenu_page(
-              $config['menu_slug'],
-              $submenu['page_title'],
-              $submenu['menu_title'],
-              $submenu['capability'],
-              $submenu['menu_slug'],
-              $submenu['callback'],
+            $config['menu_slug'],
+            $submenu['page_title'],
+            $submenu['menu_title'],
+            $submenu['capability'],
+            $submenu['menu_slug'],
+            $submenu['callback'],
           );
         }
       }
