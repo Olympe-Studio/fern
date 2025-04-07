@@ -96,15 +96,15 @@ trait WooCartActions {
 
       // Add the new/modified item
       $newKey = $cart->add_to_cart(
-          $productId,
-          $quantity,
-          $variationId,
-          $variation,
+        $productId,
+        $quantity,
+        $variationId,
+        $variation,
       );
 
       if (!$newKey) {
         throw new Exception(
-            $product->is_type('variable')
+          $product->is_type('variable')
             ? 'Failed to add variation to cart'
             : 'Failed to add product to cart',
         );
@@ -254,10 +254,10 @@ trait WooCartActions {
 
       // Add the new variation
       $newKey = $this->getCart()->add_to_cart(
-          $productId,
-          $quantity,
-          $variationId,
-          $variation,
+        $productId,
+        $quantity,
+        $variationId,
+        $variation,
       );
       $this->calculateCartTotals();
 
@@ -488,8 +488,8 @@ trait WooCartActions {
     }
 
     return array_reduce(
-        array_keys($variation_attributes),
-        function ($acc, $attribute_name) use ($variation_attributes) {
+      array_keys($variation_attributes),
+      function ($acc, $attribute_name) use ($variation_attributes) {
         try {
           $taxonomy = Types::getSafeString(str_replace('pa_', '', $attribute_name));
           $options = $variation_attributes[$attribute_name] ?? [];
@@ -501,8 +501,8 @@ trait WooCartActions {
           $acc[$taxonomy] = [
             'name' => Types::getSafeString(WC_attribute_label($attribute_name)),
             'options' => array_map(
-                fn($option) => Types::getSafeString(strtolower($option)),
-                $options,
+              fn($option) => Types::getSafeString(strtolower($option)),
+              $options,
             ),
           ];
 
@@ -513,7 +513,7 @@ trait WooCartActions {
           return $acc;
         }
       },
-        [],
+      [],
     );
   }
 
@@ -571,29 +571,54 @@ trait WooCartActions {
 
     $cart->calculate_shipping();
     $cart->calculate_fees();
-    $cart->calculate_totals();
+
+    // Hook to determine if taxes should be calculated
+    $shouldCalculateTaxes = Filters::apply('fern:woo:should_calculate_taxes', true);
+
+    $this->controlTaxCalculation($shouldCalculateTaxes, function () use ($cart) {
+      $cart->calculate_totals();
+    });
   }
 
-    /**
-     * Get the WooCommerce cart instance
-     *
-     * @throws Exception When WooCommerce is not installed
-     */
-    private function getCart(): WC_Cart {
-      if (!class_exists('\WC_Cart')) {
-          throw new Exception('WooCommerce is not installed');
-      }
+  /**
+   * Control tax calculation based on shouldCalculate parameter
+   *
+   * @param bool $shouldCalculate Whether taxes should be calculated
+   * @param callable $callback Function to execute with tax calculation setting
+   */
+  private function controlTaxCalculation(bool $shouldCalculate, callable $callback): void {
+    if (!$shouldCalculate) {
+      add_filter('woocommerce_calc_taxes', '__return_false', 100);
+    }
 
-      if (!function_exists('WC')) {
-          throw new Exception('WooCommerce function WC() not found');
-      }
+    $callback();
 
-      $wc = WC();
+    if (!$shouldCalculate) {
+      // Remove our temporary filter after calculation is done
+      remove_filter('woocommerce_calc_taxes', '__return_false', 100);
+    }
+  }
 
-      if (!$wc || !$wc->cart instanceof WC_Cart) {
-          throw new Exception('Invalid WooCommerce cart instance');
-      }
+  /**
+   * Get the WooCommerce cart instance
+   *
+   * @throws Exception When WooCommerce is not installed
+   */
+  private function getCart(): WC_Cart {
+    if (!class_exists('\WC_Cart')) {
+      throw new Exception('WooCommerce is not installed');
+    }
 
-      return $wc->cart;
+    if (!function_exists('WC')) {
+      throw new Exception('WooCommerce function WC() not found');
+    }
+
+    $wc = WC();
+
+    if (!$wc || !$wc->cart instanceof WC_Cart) {
+      throw new Exception('Invalid WooCommerce cart instance');
+    }
+
+    return $wc->cart;
   }
 }
