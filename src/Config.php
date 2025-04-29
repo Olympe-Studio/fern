@@ -19,10 +19,16 @@ class Config extends Singleton {
   protected array $config;
 
   /**
+   * @var array<string, mixed>
+   */
+  protected array $configCache = [];
+
+  /**
    * Constructor initializes the config array
    */
   protected function __construct() {
     $this->config = [];
+    $this->configCache = [];
   }
 
   /**
@@ -34,8 +40,14 @@ class Config extends Singleton {
    * @return ?mixed The configuration value or default
    */
   public static function get(string $key, mixed $default = null): mixed {
+    $instance = static::getInstance();
+
+    if (isset($instance->configCache[$key])) {
+      return $instance->configCache[$key];
+    }
+
     $keys = explode('.', $key);
-    $value = static::getInstance()->config;
+    $value = $instance->config;
 
     foreach ($keys as $subKey) {
       if (!is_array($value) || !array_key_exists($subKey, $value)) {
@@ -45,6 +57,7 @@ class Config extends Singleton {
       $value = $value[$subKey];
     }
 
+    $instance->configCache[$key] = $value;
     return $value;
   }
 
@@ -56,7 +69,26 @@ class Config extends Singleton {
    * @return boolean
    */
   public static function has(string $key): bool {
-    return static::get($key, null) !== null;
+    $instance = static::getInstance();
+
+    if (isset($instance->configCache[$key])) {
+      return true;
+    }
+
+    $keys = explode('.', $key);
+    $value = $instance->config;
+
+    foreach ($keys as $subKey) {
+      if (!is_array($value) || !array_key_exists($subKey, $value)) {
+        return false;
+      }
+
+      $value = $value[$subKey];
+    }
+
+    // Cache the result for future lookups
+    $instance->configCache[$key] = $value;
+    return true;
   }
 
   /**
@@ -93,6 +125,7 @@ class Config extends Singleton {
    */
   public function setConfig(array $config): void {
     $this->config = $config;
+    $this->configCache = [];
   }
 
   /**

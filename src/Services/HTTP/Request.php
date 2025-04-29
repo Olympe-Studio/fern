@@ -81,6 +81,26 @@ class Request extends Singleton {
    * @var Cookies The cookies of the request.
    */
   private array $cookies;
+  
+  /**
+   * @var mixed|null Cached queried object
+   */
+  private mixed $queriedObject = null;
+  
+  /**
+   * @var string|null Cached post type
+   */
+  private ?string $postType = null;
+  
+  /**
+   * @var string|null Cached taxonomy
+   */
+  private ?string $taxonomy = null;
+
+  /**
+   * @var bool|null Cached archive check result
+   */
+  private ?bool $isArchive = null;
 
   public function __construct() {
     $this->id = $this->getCurrentId();
@@ -93,10 +113,23 @@ class Request extends Singleton {
     $this->requestedUri = $_SERVER['REQUEST_URI'] ?? '';
     $this->userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
     $this->cookies = $_COOKIE;
-    $this->url = untrailingslashit(get_home_url()) . $this->requestedUri;
+    $this->url = \untrailingslashit(\get_home_url()) . $this->requestedUri;
     $this->query = $this->parseUrlParams();
 
     $this->parseBody();
+  }
+
+  /**
+   * Gets the queried object with caching
+   * 
+   * @return mixed The queried object
+   */
+  private function getQueriedObject(): mixed {
+    if ($this->queriedObject === null) {
+      $this->queriedObject = \get_queried_object();
+    }
+    
+    return $this->queriedObject;
   }
 
   /**
@@ -119,10 +152,10 @@ class Request extends Singleton {
    * Gets the current request TRUE ID
    */
   public function getCurrentId(): int {
-    $id = $this->isTerm() ? get_queried_object_id() : get_the_ID();
+    $id = $this->isTerm() ? \get_queried_object_id() : \get_the_ID();
 
     if (!$id) {
-      $queriedObject = get_queried_object();
+      $queriedObject = $this->getQueriedObject();
       $id = $queriedObject->ID ?? false;
     }
 
@@ -144,7 +177,7 @@ class Request extends Singleton {
    * Checks if the current request is a REST request,
    */
   public function isREST(): bool {
-    return defined('REST_REQUEST') && REST_REQUEST;
+    return defined('REST_REQUEST') && \REST_REQUEST;
   }
 
   /**
@@ -158,21 +191,21 @@ class Request extends Singleton {
    * Checks if the current request is a auto save request,
    */
   public function isAutoSave(): bool {
-    return defined('DOING_AUTOSAVE') && DOING_AUTOSAVE;
+    return defined('DOING_AUTOSAVE') && \DOING_AUTOSAVE;
   }
 
   /**
    * Checks if the current request is a CRON request, (Wordpress CRON only)
    */
   public function isCRON(): bool {
-    return wp_doing_cron();
+    return \wp_doing_cron();
   }
 
   /**
    * Checks if the current request is a XMLRPC request
    */
   public function isXMLRPC(): bool {
-    return defined('XMLRPC_REQUEST') && XMLRPC_REQUEST;
+    return defined('XMLRPC_REQUEST') && \XMLRPC_REQUEST;
   }
 
   /**
@@ -264,7 +297,7 @@ class Request extends Singleton {
    * Gets the expected response code for this request
    */
   public function getCode(): int {
-    return is_404() ? 404 : 200;
+    return \is_404() ? 404 : 200;
   }
 
   /**
@@ -309,7 +342,7 @@ class Request extends Singleton {
    * Checks if the current requets is a 404
    */
   public function is404(): bool {
-    return is_404();
+    return \is_404();
   }
 
   /**
@@ -501,7 +534,7 @@ class Request extends Singleton {
    * @return bool True if the current request is for the home page, false otherwise.
    */
   public function isHome(): bool {
-    return is_home() || is_front_page();
+    return \is_home() || \is_front_page();
   }
 
   /**
@@ -510,7 +543,7 @@ class Request extends Singleton {
    * @return bool True if the current request is for an author page, false otherwise.
    */
   public function isAuthor(): bool {
-    return is_author();
+    return \is_author();
   }
 
   /**
@@ -519,10 +552,14 @@ class Request extends Singleton {
    * @return string|null The current taxonomy slug, or null if not a term page.
    */
   public function getTaxonomy(): ?string {
+    if ($this->taxonomy !== null) {
+      return $this->taxonomy;
+    }
+    
     if ($this->isTerm()) {
-      $queriedObject = get_queried_object();
-
-      return $queriedObject->taxonomy ?? null;
+      $queriedObject = $this->getQueriedObject();
+      $this->taxonomy = $queriedObject->taxonomy ?? null;
+      return $this->taxonomy;
     }
 
     return null;
@@ -534,16 +571,23 @@ class Request extends Singleton {
    * @return string|null The current post type, or null if not in a post context.
    */
   public function getPostType(): ?string {
-    if (is_singular()) {
-      return get_post_type() ?: null;
+    if ($this->postType !== null) {
+      return $this->postType;
+    }
+    
+    if (\is_singular()) {
+      $this->postType = \get_post_type() ?: null;
+      return $this->postType;
     }
 
-    if (is_post_type_archive()) {
-      return get_query_var('post_type') ?: null;
+    if (\is_post_type_archive()) {
+      $this->postType = \get_query_var('post_type') ?: null;
+      return $this->postType;
     }
 
-    if (is_page()) {
-      return 'page';
+    if (\is_page()) {
+      $this->postType = 'page';
+      return $this->postType;
     }
 
     return null;
@@ -598,7 +642,7 @@ class Request extends Singleton {
    * @return bool
    */
   public function isTerm() {
-    $queriedObject = get_queried_object();
+    $queriedObject = $this->getQueriedObject();
 
     $termId = null;
 
@@ -615,42 +659,42 @@ class Request extends Singleton {
    * @return bool
    */
   public function isPage() {
-    return is_page();
+    return \is_page();
   }
 
   /**
    * Checks if the current request is for a feed.
    */
   public function isFeed(): bool {
-    return is_feed();
+    return \is_feed();
   }
 
   /**
    * Determine if the current request is an AJAX request.
    */
   public function isAjax(): bool {
-    return wp_doing_ajax();
+    return \wp_doing_ajax();
   }
 
   /**
    * Determine if the current request is an attachment.
    */
   public function isAttachment(): bool {
-    return is_attachment();
+    return \is_attachment();
   }
 
   /**
    * Determine if the current request is a pagination.
    */
   public function isPagination(): bool {
-    return is_paged();
+    return \is_paged();
   }
 
   /**
    * Determine if the current request is a tag.
    */
   public function isTag(): bool {
-    return is_tag();
+    return \is_tag();
   }
 
   /**
@@ -666,62 +710,68 @@ class Request extends Singleton {
    * Check if the current request is for a custom taxonomy archive.
    */
   public function isTax(): bool {
-    return is_tax();
+    return \is_tax();
   }
 
   /**
    * Check if the current request is for a post type archive.
    */
   public function isPostTypeArchive(): bool {
-    return is_post_type_archive();
+    return \is_post_type_archive();
   }
 
   /**
    * Check if the current request is for a date-based archive.
    */
   public function isDate(): bool {
-    return is_date();
+    return \is_date();
   }
 
   /**
    * Check if the current request is for a category archive.
    */
   public function isCategory(): bool {
-    return is_category();
+    return \is_category();
   }
 
   /**
    * Determine if the current request is an admin request.
    */
   public function isAdmin(): bool {
-    return is_admin();
+    return \is_admin();
   }
 
   /**
    * Determine if the current request is a search request.
    */
   public function isSearch(): bool {
-    return is_search();
+    return \is_search();
   }
 
   /**
    * Check if the current request is for the blog page.
    */
   public function isBlog(): bool {
-    return is_home();
+    return \is_home();
   }
 
   /**
    * Check if the current request is for any type of archive page.
    */
   public function isArchive(): bool {
-    return $this->isCategory()
+    if ($this->isArchive !== null) {
+      return $this->isArchive;
+    }
+
+    $this->isArchive = $this->isCategory()
       || $this->isTag()
       || $this->isAuthor()
       || $this->isDate()
       || $this->isBlog()
       || $this->isTax()
       || $this->isPostTypeArchive();
+
+    return $this->isArchive;
   }
 
   /**
