@@ -36,6 +36,17 @@ class Utils {
   }
 
   /**
+   * Formats a path with trailing slash
+   *
+   * @param string $path Path to format
+   *
+   * @return string Path with trailing slash
+   */
+  public static function addTrailingSlash(string $path): string {
+    return rtrim($path, '/\\') . '/';
+  }
+
+  /**
    * Get the number of arguments expected by a callable.
    *
    * @param callable $callable The callable to inspect.

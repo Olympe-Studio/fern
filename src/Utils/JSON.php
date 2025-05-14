@@ -38,6 +38,10 @@ final class JSON {
       int $depth = self::DEFAULT_DEPTH,
       int $flags = 0,
   ): bool {
+    if (empty($json)) {
+      return false;
+    }
+    
     $validatedFlags = $flags & self::VALID_VALIDATE_FLAGS;
 
     if (function_exists('json_validate')) {
@@ -94,7 +98,10 @@ final class JSON {
       int $flags = 0,
   ): mixed {
     if (empty($json)) {
-      throw new InvalidArgumentException('JSON string cannot be empty');
+      if ($flags & JSON_THROW_ON_ERROR) {
+        throw new InvalidArgumentException('JSON string cannot be empty');
+      }
+      return null;
     }
 
     try {
@@ -129,6 +136,10 @@ final class JSON {
       int $depth = self::DEFAULT_DEPTH,
       int $flags = 0,
   ): array {
+    if (empty($json)) {
+      throw new JsonException('JSON string cannot be empty');
+    }
+    
     $result = self::decode($json, true, $depth, $flags | JSON_THROW_ON_ERROR);
 
     if (!is_array($result)) {
@@ -143,7 +154,7 @@ final class JSON {
    *
    * @param mixed $data The data to be encoded
    *
-   * @return string Formatted JSON string
+   * @return string|false Formatted JSON string
    *
    * @throws JsonException If encoding fails
    */

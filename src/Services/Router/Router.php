@@ -59,6 +59,11 @@ class Router extends Singleton {
    */
   private array $config;
 
+  /**
+   * @var array<string, string|null> Controller resolution cache
+   */
+  private array $controllerCache = [];
+
   public function __construct() {
     $this->request = Request::getInstance();
     $this->config = Config::get('core.routes');
@@ -187,7 +192,40 @@ class Router extends Singleton {
    *
    * @return string|null The controller name or null if it doesn't exists.
    */
-  private function resolveController(?string $viewType = 'view'): ?string {
+  public function resolveController(?string $viewType = null): ?string {
+    $cacheKey = $viewType ?? 'view';
+    
+    // For admin requests, add the page to the cache key
+    if ($viewType === 'admin') {
+      $cacheKey .= '_' . $this->request->getUrlParam('page');
+    } else {
+      $id = $this->request->getCurrentId();
+      $type = $this->request->isTerm() ? $this->request->getTaxonomy() : $this->request->getPostType();
+      $cacheKey .= '_' . $id . '_' . ($type ?? 'unknown');
+      
+      if ($this->request->isArchive()) {
+        $cacheKey .= '_archive';
+      }
+    }
+    
+    if (isset($this->controllerCache[$cacheKey])) {
+      return $this->controllerCache[$cacheKey];
+    }
+    
+    $controller = $this->resolveControllerInternal($viewType);
+    $this->controllerCache[$cacheKey] = $controller;
+    
+    return $controller;
+  }
+  
+  /**
+   * Internal implementation of resolveController without caching
+   * 
+   * @param string|null $viewType The view type to resolve.
+   * 
+   * @return string|null The controller name or null if it doesn't exists.
+   */
+  private function resolveControllerInternal(?string $viewType = null): ?string {
     if ($viewType === 'admin') {
       return $this->handleAdminController();
     }
@@ -299,25 +337,25 @@ class Router extends Singleton {
     $id = -1;
 
     if (function_exists('wc_get_page_id')) {
-      if (is_shop()) {
-        $id = wc_get_page_id('shop');
+      if (\is_shop()) {
+        $id = \wc_get_page_id('shop');
       }
 
-      if (is_account_page()) {
-        $id = wc_get_page_id('myaccount');
+      if (\is_account_page()) {
+        $id = \wc_get_page_id('myaccount');
       }
 
-      if (is_cart()) {
-        $id = wc_get_page_id('cart');
+      if (\is_cart()) {
+        $id = \wc_get_page_id('cart');
       }
 
-      if (is_checkout()) {
-        $id = wc_get_page_id('checkout');
+      if (\is_checkout()) {
+        $id = \wc_get_page_id('checkout');
       }
     }
 
-    if (is_home()) {
-      $id = (int) get_option('page_for_posts');
+    if (\is_home()) {
+      $id = (int) \get_option('page_for_posts');
     }
 
     return Filters::apply('fern:core:router:get_archive_page_id', $id, $type);
@@ -447,14 +485,19 @@ class Router extends Singleton {
    * Checks if the request should stop the router from resolving.
    */
   private function shouldStop(): bool {
-    return $this->request->isCLI()
-      || $this->request->isXMLRPC()
-      || $this->request->isAutoSave()
-      || $this->request->isCRON()
-      || $this->request->isREST()
-      || $this->request->isSitemap()
-      || ($this->request->isAjax() && !$this->request->isAction())
-      || (is_null(get_queried_object()) && !$this->request->isAction() && !$this->request->is404());;
+    $request = $this->request;
+    
+    // Fast path: if any of these conditions are true, return immediately
+    if ($request->isCLI() || $request->isXMLRPC() || $request->isAutoSave()) {
+      return true;
+    }
+    
+    // Consolidate remaining conditions to minimize method calls
+    return $request->isCRON() 
+        || $request->isREST() 
+        || $request->isSitemap()
+        || ($request->isAjax() && !$request->isAction())
+        || (is_null(\get_queried_object()) && !$request->isAction() && !$request->is404());
   }
 
   /**

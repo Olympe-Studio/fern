@@ -23,6 +23,11 @@ class Fern extends Singleton {
   const VERSION = '0.1.0';
 
   /**
+   * @var bool|null Cache for development environment status
+   */
+  private static ?bool $isDev = null;
+
+  /**
    * Gets Fern current version.
    */
   public static function getVersion(): string {
@@ -40,7 +45,12 @@ class Fern extends Singleton {
    * Checks if the current environment is development
    */
   public static function isDev(): bool {
-    return defined('WP_ENV') && WP_ENV === 'development';
+    if (self::$isDev !== null) {
+      return self::$isDev;
+    }
+
+    self::$isDev = defined('WP_ENV') && \WP_ENV === 'development';
+    return self::$isDev;
   }
 
   /**

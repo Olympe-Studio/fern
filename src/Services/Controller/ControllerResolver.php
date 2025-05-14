@@ -10,6 +10,7 @@ use Fern\Core\Services\HTTP\Request;
 use Fern\Core\Wordpress\Events;
 use Fern\Core\Wordpress\Filters;
 use ReflectionClass;
+use Fern\Core\Fern;
 
 /**
  * @phpstan-type ControllerRegistry array{
@@ -40,6 +41,16 @@ class ControllerResolver extends Singleton {
 
   /** @var ControllerRegistry */
   private array $controllers;
+
+  /**
+   * @var array<string, ReflectionClass<Controller>>
+   */
+  private array $reflectionCache = [];
+
+  /**
+   * @var array<string, string> Controller type cache for production
+   */
+  private static array $controllerTypeCache = [];
 
   public function __construct() {
     $this->controllers = [
@@ -87,16 +98,24 @@ class ControllerResolver extends Singleton {
       return;
     }
 
-    /** @var class-string<Controller> $className */
-    $reflection = new ReflectionClass($className);
+    // Check if already cached
+    if (isset($this->reflectionCache[$className])) {
+      $reflection = $this->reflectionCache[$className];
+    } else {
+      $reflection = new ReflectionClass($className);
 
-    if (!$reflection->implementsInterface(Controller::class)) {
-      return;
+      // Early return if not a Controller
+      if (!$reflection->implementsInterface(Controller::class)) {
+        return;
+      }
+
+      /** @var ReflectionClass<Controller> $reflection */
+      $this->reflectionCache[$className] = $reflection;
     }
 
     /** @var ReflectionClass<Controller> $reflection */
     $this->validateControllerClass($reflection);
-    /** @var ReflectionClass<Controller> $reflection */
+
     $type = $this->determineControllerType($reflection);
     $handle = (string) $reflection->getProperty('handle')->getValue();
 
@@ -291,24 +310,33 @@ class ControllerResolver extends Singleton {
    * @return string The determined controller type
    */
   private function determineControllerType(ReflectionClass $reflection): string {
+    $className = $reflection->getName();
+    
+    // Fast path for production with type cache
+    if (!Fern::isDev() && isset(self::$controllerTypeCache[$className])) {
+      return self::$controllerTypeCache[$className];
+    }
+    
     $handleProperty = $reflection->getProperty('handle');
     $handleProperty->setAccessible(true);
     $handleValue = $handleProperty->getValue();
 
     if ($handleValue === '_default') {
-      return self::TYPE_DEFAULT;
+      $type = self::TYPE_DEFAULT;
+    } elseif ($handleValue === '_404') {
+      $type = self::TYPE_404;
+    } else {
+      $traits = $reflection->getTraitNames();
+      $type = in_array('Fern\Core\Services\Controller\AdminController', $traits, true) 
+        ? self::TYPE_ADMIN 
+        : self::TYPE_VIEW;
     }
-
-    if ($handleValue === '_404') {
-      return self::TYPE_404;
+    
+    // Cache result in production
+    if (!Fern::isDev()) {
+      self::$controllerTypeCache[$className] = $type;
     }
-
-    $traits = $reflection->getTraitNames();
-
-    if (in_array('Fern\Core\Services\Controller\AdminController', $traits, true)) {
-      return self::TYPE_ADMIN;
-    }
-
-    return self::TYPE_VIEW;
+    
+    return $type;
   }
 }

@@ -13,9 +13,25 @@ use RecursiveIteratorIterator;
 class Autoloader extends Singleton {
   /** @var string The path to the includes.php file */
   public string $includesPath;
+  
+  /** 
+   * @var array<string, array<string>> Caches file paths to avoid repeated directory scans
+   */
+  private static array $filePathCache = [];
+
+  /**
+   * Formats a path with trailing slash
+   *
+   * @param string $path Path to format
+   *
+   * @return string Path with trailing slash
+   */
+  private static function addTrailingSlash(string $path): string {
+    return rtrim($path, '/\\') . '/';
+  }
 
   public function __construct() {
-    $this->includesPath = trailingslashit(Fern::getRoot()) . 'includes.php';
+    $this->includesPath = self::addTrailingSlash(Fern::getRoot()) . 'includes.php';
   }
 
   /**
@@ -62,6 +78,12 @@ class Autoloader extends Singleton {
    * @return array<string>
    */
   private static function getFilesRecursively(string $dir, ?callable $filter = null): array {
+    // Return cached results if available
+    $cacheKey = $dir . '_' . ($filter ? spl_object_hash($filter) : 'no_filter');
+    if (isset(self::$filePathCache[$cacheKey])) {
+      return self::$filePathCache[$cacheKey];
+    }
+
     $result = [];
 
     if (!is_dir($dir) || !is_readable($dir)) {
@@ -85,6 +107,9 @@ class Autoloader extends Singleton {
     }
 
     sort($result);
+
+    // Cache the results
+    self::$filePathCache[$cacheKey] = $result;
 
     return $result;
   }
@@ -117,7 +142,7 @@ PHP . PHP_EOL;
    */
   private static function getControllers(): array {
     $root = Fern::getRoot();
-    $dir = trailingslashit($root) . 'App/Controllers';
+    $dir = self::addTrailingSlash($root) . 'App/Controllers';
 
     return self::getFilesRecursively($dir);
   }
@@ -132,7 +157,7 @@ PHP . PHP_EOL;
    */
   private static function getUnderscoreFiles(): array {
     $root = Fern::getRoot();
-    $appPath = trailingslashit($root) . 'App';
+    $appPath = self::addTrailingSlash($root) . 'App';
 
     return self::getFilesRecursively($appPath, fn ($fileInfo) => $fileInfo->isFile()
         && $fileInfo->getExtension() === 'php'

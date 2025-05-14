@@ -43,9 +43,7 @@ class Scheduler extends Singleton {
    * @throws SchedulerParsingError
    */
   public static function createSchedule(string $str): void {
-    $existingSchedules = wp_get_schedules();
-
-    if (isset($existingSchedules[$str])) {
+    if (in_array($str, ['hourly', 'twicedaily', 'daily'], true)) {
       return;
     }
 
@@ -58,7 +56,7 @@ class Scheduler extends Singleton {
       $schedules[$str] = $schedule;
 
       return $schedules;
-    });
+    }, 25, 1);
   }
 
   /**

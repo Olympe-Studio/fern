@@ -8,37 +8,28 @@ abstract class Singleton {
   /** @var array<string, static> */
   private static array $_instances = [];
 
-  protected function __construct() {
-  }
+  protected function __construct() {}
 
   /**
    * Avoid clone instance
    */
-  private function __clone() {
-    // Private clone method to prevent cloning of the instance
-  }
+  private function __clone() {}
 
   /**
    * Prevent instance unserialization
    */
-  final public function __wakeup(): void {
-    // Private wakeup method to prevent unserializing of the instance
-  }
+  final public function __wakeup(): void {}
 
   /**
    * Return the unique instance of the class called.
    *
-   * @param array<int, mixed> $args
+   * @param array<int, mixed> ...$args Constructor arguments
    *
    * @return static The class classed as a unique instance.
    */
   public static function getInstance(array ...$args): static {
-    $calledClass = get_called_class();
+    $calledClass = static::class;
 
-    if (!isset(self::$_instances[$calledClass])) {
-      self::$_instances[$calledClass] = new $calledClass(...$args);
-    }
-
-    return self::$_instances[$calledClass];
+    return self::$_instances[$calledClass] ??= new $calledClass(...$args);
   }
 }
