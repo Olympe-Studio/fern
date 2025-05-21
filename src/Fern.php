@@ -42,6 +42,13 @@ class Fern extends Singleton {
   }
 
   /**
+   * Get the context
+   */
+  public static function context(): array {
+    return Context::get();
+  }
+
+  /**
    * Checks if the current environment is development
    */
   public static function isDev(): bool {

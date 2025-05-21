@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Fern\Core\Services\Router;
 
 use Fern\Core\Config;
+use Fern\Core\Context;
 use Fern\Core\Errors\ActionException;
 use Fern\Core\Errors\ActionNotFoundException;
 use Fern\Core\Errors\AttributeValidationException;
@@ -99,6 +100,8 @@ class Router extends Singleton {
     $req = Request::getCurrent();
 
     Filters::on(['template_include', 'admin_'], static function (): void {
+      Context::boot();
+
       $router = Router::getInstance();
       $router->resolve();
     }, 10, 1);
@@ -194,7 +197,7 @@ class Router extends Singleton {
    */
   public function resolveController(?string $viewType = null): ?string {
     $cacheKey = $viewType ?? 'view';
-    
+
     // For admin requests, add the page to the cache key
     if ($viewType === 'admin') {
       $cacheKey .= '_' . $this->request->getUrlParam('page');
@@ -202,22 +205,22 @@ class Router extends Singleton {
       $id = $this->request->getCurrentId();
       $type = $this->request->isTerm() ? $this->request->getTaxonomy() : $this->request->getPostType();
       $cacheKey .= '_' . $id . '_' . ($type ?? 'unknown');
-      
+
       if ($this->request->isArchive()) {
         $cacheKey .= '_archive';
       }
     }
-    
+
     if (isset($this->controllerCache[$cacheKey])) {
       return $this->controllerCache[$cacheKey];
     }
-    
+
     $controller = $this->resolveControllerInternal($viewType);
     $this->controllerCache[$cacheKey] = $controller;
-    
+
     return $controller;
   }
-  
+
   /**
    * Internal implementation of resolveController without caching
    * 
@@ -486,18 +489,18 @@ class Router extends Singleton {
    */
   private function shouldStop(): bool {
     $request = $this->request;
-    
+
     // Fast path: if any of these conditions are true, return immediately
     if ($request->isCLI() || $request->isXMLRPC() || $request->isAutoSave()) {
       return true;
     }
-    
+
     // Consolidate remaining conditions to minimize method calls
-    return $request->isCRON() 
-        || $request->isREST() 
-        || $request->isSitemap()
-        || ($request->isAjax() && !$request->isAction())
-        || (is_null(\get_queried_object()) && !$request->isAction() && !$request->is404());
+    return $request->isCRON()
+      || $request->isREST()
+      || $request->isSitemap()
+      || ($request->isAjax() && !$request->isAction())
+      || (is_null(\get_queried_object()) && !$request->isAction() && !$request->is404());
   }
 
   /**

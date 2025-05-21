@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Fern\Core\Services\Views;
 
 use Fern\Core\Config;
+use Fern\Core\Context;
 use Fern\Core\Wordpress\Events;
 use Fern\Core\Wordpress\Filters;
 use InvalidArgumentException;
@@ -25,6 +26,11 @@ class Views {
    */
   public static function render(string $template, array $data = [], bool $doingBlock = false): string {
     $engine = self::getEngine();
+    $ctx = Context::get();
+    $data['ctx'] = [
+      ...$ctx,
+      ...$data['ctx'] ?? [],
+    ];
 
     if (!$doingBlock) {
       /**
