@@ -125,6 +125,42 @@ trait WooCartActions {
   }
 
   /**
+   * Add multiple products to cart in batch
+   *
+   * @param Request $request Contains array of items with product_id, quantity, variation_id, variation
+   * @return Reply Response with success status and batch operation results
+   */
+  public function batchAddToCart(Request $request): Reply {
+    $action = $request->getAction();
+    $items = $action->get('items') ?? [];
+
+    if (!is_array($items) || empty($items)) {
+      return new Reply(400, [
+        'success' => false,
+        'message' => 'Items array is required and cannot be empty',
+      ]);
+    }
+
+    try {
+      $results = $this->processBatchItems($items);
+      $successCount = count(array_filter($results, fn($item) => $item['success']));
+      $totalCount = count($results);
+
+      return new Reply(200, [
+        'success' => $successCount > 0,
+        'message' => $this->getBatchMessage($successCount, $totalCount),
+        'results' => $results,
+        'cart' => $this->formatCartData(),
+      ]);
+    } catch (Exception $e) {
+      return new Reply(400, [
+        'success' => false,
+        'message' => $e->getMessage(),
+      ]);
+    }
+  }
+
+  /**
    * Apply a coupon to the cart
    */
   public function applyCoupon(Request $request): Reply {
@@ -620,5 +656,91 @@ trait WooCartActions {
     }
 
     return $wc->cart;
+  }
+
+  /**
+   * Process batch items for cart addition
+   *
+   * @param array $items Array of items to add to cart
+   * @return array Results of batch processing
+   */
+  private function processBatchItems(array $items): array {
+    $results = [];
+    $cart = $this->getCart();
+
+    foreach ($items as $index => $item) {
+      try {
+        $result = $this->processSingleBatchItem($item, $cart);
+        $results[] = array_merge(['index' => $index], $result);
+      } catch (Exception $e) {
+        $results[] = [
+          'index' => $index,
+          'success' => false,
+          'message' => $e->getMessage(),
+          'cart_item_key' => null,
+        ];
+      }
+    }
+
+    return $results;
+  }
+
+  /**
+   * Process a single item in batch operation
+   *
+   * @param array $item Item data with product_id, quantity, etc.
+   * @param WC_Cart $cart WooCommerce cart instance
+   * @return array Processing result for the item
+   */
+  private function processSingleBatchItem(array $item, WC_Cart $cart): array {
+    $productId = (int) ($item['product_id'] ?? 0);
+    $quantity = (int) ($item['quantity'] ?? 1);
+    $variationId = (int) ($item['variation_id'] ?? 0);
+    $variation = $item['variation'] ?? [];
+
+    if ($productId <= 0) {
+      throw new Exception('Invalid product ID');
+    }
+
+    $product = Types::getSafeWpValue(wc_get_product($productId));
+
+    if ($product === null) {
+      throw new Exception('Product not found');
+    }
+
+    $newKey = $cart->add_to_cart($productId, $quantity, $variationId, $variation);
+
+    if (!$newKey) {
+      throw new Exception(
+        $product->is_type('variable')
+          ? 'Failed to add variation to cart'
+          : 'Failed to add product to cart'
+      );
+    }
+
+    return [
+      'success' => true,
+      'message' => 'Item added to cart',
+      'cart_item_key' => $newKey,
+    ];
+  }
+
+  /**
+   * Generate batch operation message
+   *
+   * @param int $successCount Number of successful additions
+   * @param int $totalCount Total number of items processed
+   * @return string Batch operation message
+   */
+  private function getBatchMessage(int $successCount, int $totalCount): string {
+    if ($successCount === 0) {
+      return 'No items were added to cart';
+    }
+
+    if ($successCount === $totalCount) {
+      return "All {$totalCount} items added to cart successfully";
+    }
+
+    return "{$successCount} of {$totalCount} items added to cart";
   }
 }
