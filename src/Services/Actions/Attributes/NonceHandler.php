@@ -23,17 +23,15 @@ class NonceHandler implements AttributesHandler {
    * @return bool|string Returns true if the nonce is valid, or an error message
    */
   public function handle(
-      ReflectionAttribute $attribute,
-      object $controller,
-      string $methodName,
-      Request $request,
+    ReflectionAttribute $attribute,
+    object $controller,
+    string $methodName,
+    Request $request,
   ): bool|string {
     $actionName = $attribute->newInstance()->actionName;
     $action = $request->getAction();
     $isValid = wp_verify_nonce($action->get('_nonce'), $actionName);
 
-    return ! (!$isValid) 
-       
-     ;
+    return ! (!$isValid);
   }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Fern\Core\Services\Wordpress;
 
 use Fern\Core\Config;
+use Fern\Core\Services\HTTP\Request;
 use Fern\Core\Utils\Types;
 use Fern\Core\Wordpress\Events;
 use Fern\Core\Wordpress\Filters;
@@ -15,7 +16,8 @@ class Wordpress {
    * Boot the Wordpress service
    */
   public static function boot(): void {
-    if (!wp_doing_ajax() && !wp_doing_cron()) {
+    $request = Request::getCurrent();
+    if (!wp_doing_ajax() && !wp_doing_cron() && $request->isGet()) {
       self::bootExcerpt();
       self::bootUploadMimes();
       self::bootDashboardWidgets();

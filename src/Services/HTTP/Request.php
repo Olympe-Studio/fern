@@ -81,17 +81,17 @@ class Request extends Singleton {
    * @var Cookies The cookies of the request.
    */
   private array $cookies;
-  
+
   /**
    * @var mixed|null Cached queried object
    */
   private mixed $queriedObject = null;
-  
+
   /**
    * @var string|null Cached post type
    */
   private ?string $postType = null;
-  
+
   /**
    * @var string|null Cached taxonomy
    */
@@ -128,7 +128,7 @@ class Request extends Singleton {
     if ($this->queriedObject === null) {
       $this->queriedObject = \get_queried_object();
     }
-    
+
     return $this->queriedObject;
   }
 
@@ -555,7 +555,7 @@ class Request extends Singleton {
     if ($this->taxonomy !== null) {
       return $this->taxonomy;
     }
-    
+
     if ($this->isTerm()) {
       $queriedObject = $this->getQueriedObject();
       $this->taxonomy = $queriedObject->taxonomy ?? null;
@@ -574,7 +574,7 @@ class Request extends Singleton {
     if ($this->postType !== null) {
       return $this->postType;
     }
-    
+
     if (\is_singular()) {
       $this->postType = \get_post_type() ?: null;
       return $this->postType;
