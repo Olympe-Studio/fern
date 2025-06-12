@@ -462,6 +462,20 @@ class Reply {
      */
     Events::trigger('fern:core:reply:has_been_sent', $this);
     Events::trigger('qm/stop', 'fern:resolve_routes');
+
+    // For action requests, ensure clean exit without Query Monitor interference
+    if ($req->isAction()) {
+      // Clean any remaining output buffers
+      while (ob_get_level()) {
+        ob_end_clean();
+      }
+
+      // Force fast CGI to finish request if available
+      if (function_exists('fastcgi_finish_request')) {
+        fastcgi_finish_request();
+      }
+    }
+
     exit;
   }
 
