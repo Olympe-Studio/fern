@@ -10,10 +10,11 @@ use Fern\Core\Services\HTTP\Request;
 use Fern\Core\Wordpress\Filters;
 use WP_Block_Type;
 use WP_Block_Type_Registry;
+use Fern\Core\Services\Gutenberg\Blocks;
 
 class Gutenberg extends Singleton {
   /**
- * @var array<string|int>
+   * @var array<string|int>
    */ protected $showOnPostTypes;
 
   /**
@@ -40,6 +41,9 @@ class Gutenberg extends Singleton {
     $instance = self::getInstance();
     $req = Request::getInstance();
 
+    // Initialise block related hooks on every request.
+    Blocks::boot();
+
     if ($req->isAdmin()) {
       Filters::on('use_block_editor_for_post_type', [$instance, 'explicitlyShowOnPostTypes'], 10, 2);
       Filters::on('allowed_block_types_all', [$instance, 'filterAllowedBlocks'], 2, 1);
@@ -61,7 +65,7 @@ class Gutenberg extends Singleton {
       }
 
       $postId = (int) $post->ID;
-      $pageIds = array_filter($this->showOnPostTypes, function($value) {
+      $pageIds = array_filter($this->showOnPostTypes, function ($value) {
         return is_numeric($value) && (int) $value > 0;
       });
 
