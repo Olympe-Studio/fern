@@ -26,11 +26,16 @@ class Views {
    */
   public static function render(string $template, array $data = [], bool $doingBlock = false): string {
     $engine = self::getEngine();
-    $ctx = Context::get();
-    $data['ctx'] = [
-      ...$ctx,
-      ...$data['ctx'] ?? [],
+    $baseCtx = Context::get();
+    $existingCtx = isset($data['ctx']) && is_array($data['ctx']) ? $data['ctx'] : [];
+
+    /** @var array<string,mixed> $mergedCtx */
+    $mergedCtx = [
+      ...$baseCtx,
+      ...$existingCtx,
     ];
+
+    $data['ctx'] = $mergedCtx;
 
     if (!$doingBlock) {
       /**
@@ -40,7 +45,7 @@ class Views {
        *
        * @return array
        */
-      $ctx = Filters::apply('fern:core:views:ctx', $data['ctx'] ?? []);
+      $ctx = Filters::apply('fern:core:views:ctx', $data['ctx']);
 
       if ($ctx !== [] && !is_null($ctx)) {
         $data['ctx'] = $ctx;

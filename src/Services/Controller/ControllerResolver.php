@@ -43,7 +43,9 @@ class ControllerResolver extends Singleton {
   private array $controllers;
 
   /**
-   * @var array<string, ReflectionClass<Controller>>
+   * Cache of ReflectionClass instances for discovered controllers.
+   *
+   * @var array<string, ReflectionClass<object>>
    */
   private array $reflectionCache = [];
 
@@ -109,8 +111,9 @@ class ControllerResolver extends Singleton {
         return;
       }
 
-      /** @var ReflectionClass<Controller> $reflection */
-      $this->reflectionCache[$className] = $reflection;
+      /** @var ReflectionClass<object> $ref */
+      $ref = $reflection;
+      $this->reflectionCache[$className] = $ref;
     }
 
     /** @var ReflectionClass<Controller> $reflection */
@@ -311,12 +314,12 @@ class ControllerResolver extends Singleton {
    */
   private function determineControllerType(ReflectionClass $reflection): string {
     $className = $reflection->getName();
-    
+
     // Fast path for production with type cache
     if (!Fern::isDev() && isset(self::$controllerTypeCache[$className])) {
       return self::$controllerTypeCache[$className];
     }
-    
+
     $handleProperty = $reflection->getProperty('handle');
     $handleProperty->setAccessible(true);
     $handleValue = $handleProperty->getValue();
@@ -327,16 +330,16 @@ class ControllerResolver extends Singleton {
       $type = self::TYPE_404;
     } else {
       $traits = $reflection->getTraitNames();
-      $type = in_array('Fern\Core\Services\Controller\AdminController', $traits, true) 
-        ? self::TYPE_ADMIN 
+      $type = in_array('Fern\Core\Services\Controller\AdminController', $traits, true)
+        ? self::TYPE_ADMIN
         : self::TYPE_VIEW;
     }
-    
+
     // Cache result in production
     if (!Fern::isDev()) {
       self::$controllerTypeCache[$className] = $type;
     }
-    
+
     return $type;
   }
 }
