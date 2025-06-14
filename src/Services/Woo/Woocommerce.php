@@ -71,27 +71,22 @@ class Woocommerce {
       return ['page' => null, 'subPage' => null];
     }
 
-    /** @phpstan-ignore-next-line */
     if (is_shop()) {
       return ['page' => 'shop', 'subPage' => null];
     }
 
-    /** @phpstan-ignore-next-line */
     if (is_product()) {
       return ['page' => 'product', 'subPage' => null];
     }
 
-    /** @phpstan-ignore-next-line */
     if (is_product_category()) {
       return ['page' => 'product-category', 'subPage' => null];
     }
 
-    /** @phpstan-ignore-next-line */
     if (is_cart()) {
       return ['page' => 'cart', 'subPage' => null];
     }
 
-    /** @phpstan-ignore-next-line */
     if (is_checkout()) {
       $endpoint = WC()->query->get_current_endpoint();
 
@@ -101,7 +96,6 @@ class Woocommerce {
       ];
     }
 
-    /** @phpstan-ignore-next-line */
     if (is_account_page()) {
       $endpoint = WC()->query->get_current_endpoint();
 

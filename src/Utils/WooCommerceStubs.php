@@ -36,6 +36,18 @@ namespace {
     }
   }
 
+  if (!function_exists('is_product_category')) {
+    function is_product_category(): bool {
+      return false;
+    }
+  }
+
+  if (!function_exists('is_product')) {
+    function is_product(): bool {
+      return false;
+    }
+  }
+
   // ---------------------------------------------------------------------
   // WooCommerce class stubs
   // ---------------------------------------------------------------------
