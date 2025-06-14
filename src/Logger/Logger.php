@@ -49,9 +49,7 @@ class Logger extends Singleton {
    * @param string $logFileName The name of the log file.
    */
   private function setLogFileName(string $logFileName = self::DEFAULT_LOG_FILE): void {
-    $logFileName = (empty($logFileName) || !is_string($logFileName))
-      ? self::DEFAULT_LOG_FILE
-      : $logFileName;
+    $logFileName = empty($logFileName) ? self::DEFAULT_LOG_FILE : $logFileName;
 
     $this->logFileName = $logFileName;
     $this->logFilePath = self::getLogFolder() . '/' . $this->logFileName;
@@ -150,7 +148,7 @@ class Logger extends Singleton {
     }
 
     try {
-      return ' Context: ' . json_encode($contextData, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+      return ' Context: ' . json_encode($contextData, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     } catch (JsonException $e) {
       @error_log('Error encoding context data: ' . $e->getMessage());
       throw $e;

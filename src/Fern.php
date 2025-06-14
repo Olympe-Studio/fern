@@ -42,10 +42,15 @@ class Fern extends Singleton {
   }
 
   /**
-   * Get the context
+   * Retrieve the global application context.
+   *
+   * @return array<string,mixed>
    */
   public static function context(): array {
-    return Context::get();
+    /** @var array<string,mixed> $context */
+    $context = Context::get();
+
+    return $context;
   }
 
   /**

@@ -25,7 +25,7 @@ use WP_REST_Response;
  *   path: string,
  *   method: string,
  *   callback: callable(Request): mixed,
- *   permission?: callable(WP_REST_Request): bool
+ *   permission?: callable(WP_REST_Request<array<string,mixed>>): bool
  * }
  */
 class API extends Singleton {
@@ -56,7 +56,7 @@ class API extends Singleton {
 
   /**
    * @param callable(Request): mixed             $callback
-   * @param callable(WP_REST_Request): bool|null $permission
+   * @param callable(WP_REST_Request<array<string,mixed>>): bool|null $permission
    */
   public static function get(string $path, callable $callback, ?callable $permission = null): self {
     return self::addRoute('GET', $path, $callback, $permission);
@@ -64,7 +64,7 @@ class API extends Singleton {
 
   /**
    * @param callable(Request): mixed             $callback
-   * @param callable(WP_REST_Request): bool|null $permission
+   * @param callable(WP_REST_Request<array<string,mixed>>): bool|null $permission
    */
   public static function post(string $path, callable $callback, ?callable $permission = null): self {
     return self::addRoute('POST', $path, $callback, $permission);
@@ -72,7 +72,7 @@ class API extends Singleton {
 
   /**
    * @param callable(Request): mixed             $callback
-   * @param callable(WP_REST_Request): bool|null $permission
+   * @param callable(WP_REST_Request<array<string,mixed>>): bool|null $permission
    */
   public static function put(string $path, callable $callback, ?callable $permission = null): self {
     return self::addRoute('PUT', $path, $callback, $permission);
@@ -80,7 +80,7 @@ class API extends Singleton {
 
   /**
    * @param callable(Request): mixed             $callback
-   * @param callable(WP_REST_Request): bool|null $permission
+   * @param callable(WP_REST_Request<array<string,mixed>>): bool|null $permission
    */
   public static function delete(string $path, callable $callback, ?callable $permission = null): self {
     return self::addRoute('DELETE', $path, $callback, $permission);
@@ -88,7 +88,7 @@ class API extends Singleton {
 
   /**
    * @param callable(Request): mixed             $callback
-   * @param callable(WP_REST_Request): bool|null $permission
+   * @param callable(WP_REST_Request<array<string,mixed>>): bool|null $permission
    */
   public static function patch(string $path, callable $callback, ?callable $permission = null): self {
     return self::addRoute('PATCH', $path, $callback, $permission);
@@ -111,15 +111,15 @@ class API extends Singleton {
    * @return void
    */
   public function registerRoutes(): void {
-    $namespace = trim($this->config['namespace'], '/');
-    $version = $this->config['version'];
+    $namespace = trim((string) ($this->config['namespace'] ?? 'fern'), '/');
+    $version = (string) ($this->config['version'] ?? '1');
     $base = sprintf('%s/v%s', $namespace, $version);
 
     foreach ($this->routes as $route) {
       register_rest_route(
-          $base,
-          $route['path'],
-          [
+        $base,
+        $route['path'],
+        [
           'methods' => $route['method'],
           'callback' => $this->createCallback($route['callback']),
           'permission_callback' => $this->wrapPermissionCallback($route['permission'] ?? null),
@@ -130,13 +130,13 @@ class API extends Singleton {
 
   /**
    * @param callable(Request): mixed             $callback
-   * @param callable(WP_REST_Request): bool|null $permission
+   * @param callable(WP_REST_Request<array<string,mixed>>): bool|null $permission
    */
   private static function addRoute(
-      string $method,
-      string $path,
-      callable $callback,
-      ?callable $permission,
+    string $method,
+    string $path,
+    callable $callback,
+    ?callable $permission,
   ): self {
     if (!in_array($method, ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'], true)) {
       throw new InvalidArgumentException('Invalid method: ' . $method);
@@ -150,23 +150,30 @@ class API extends Singleton {
       throw new InvalidArgumentException('Route collision: ' . $key);
     }
 
-    $instance->routes[$key] = [
+    $route = [
       'path' => $path,
       'method' => $method,
       'callback' => $callback,
-      'permission' => $permission,
     ];
+
+    if ($permission !== null) {
+      /** @var callable(WP_REST_Request<array<string,mixed>>): bool $permission */
+      $route['permission'] = $permission;
+    }
+
+    /** @var Route $route */
+    $instance->routes[$key] = $route;
 
     return $instance;
   }
 
   /**
-   * @param callable(WP_REST_Request): bool|null $callback
+   * @param callable(WP_REST_Request<array<string,mixed>>): bool|null $callback
    *
-   * @return callable(WP_REST_Request): bool|Reply
+   * @return callable(WP_REST_Request<array<string,mixed>>): bool
    */
   private function wrapPermissionCallback(?callable $callback): callable {
-    return function (WP_REST_Request $request) use ($callback): bool|Reply {
+    return function (WP_REST_Request $request) use ($callback): bool {
       if ($callback === null) {
         return true;
       }
@@ -190,10 +197,10 @@ class API extends Singleton {
   /**
    * @param callable(Request): mixed $handler
    *
-   * @return callable(WP_REST_Request): WP_REST_Response|WP_Error|Reply
+   * @return callable(WP_REST_Request<array<string,mixed>>): (WP_REST_Response|WP_Error)
    */
   private function createCallback(callable $handler): callable {
-    return function (WP_REST_Request $wpRequest) use ($handler): WP_REST_Response|WP_Error|Reply {
+    return function (WP_REST_Request $wpRequest) use ($handler): WP_REST_Response|WP_Error {
       try {
         $request = Request::getCurrent();
         $result = $handler($request);
@@ -221,9 +228,9 @@ class API extends Singleton {
         }
 
         return new WP_Error(
-            'rest_error',
-            $e->getMessage(),
-            ['status' => 500],
+          'rest_error',
+          $e->getMessage(),
+          ['status' => 500],
         );
       }
     };

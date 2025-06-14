@@ -13,6 +13,11 @@ use Fern\Core\Wordpress\Filters;
 use WC_Product;
 use WC_Product_Variable;
 
+/**
+ * Helper actions for Woo cart manipulation.
+ *
+ * @phpstan-ignore-next-line trait.unused This trait may be consumed dynamically in application code.
+ */
 trait WooCartActions {
   /**
    * Get the ecommerce content

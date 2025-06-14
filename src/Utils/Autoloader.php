@@ -1,4 +1,6 @@
-<?php declare(strict_types=1);
+<?php
+
+declare(strict_types=1);
 
 namespace Fern\Core\Utils;
 
@@ -13,7 +15,7 @@ use RecursiveIteratorIterator;
 class Autoloader extends Singleton {
   /** @var string The path to the includes.php file */
   public string $includesPath;
-  
+
   /** 
    * @var array<string, array<string>> Caches file paths to avoid repeated directory scans
    */
@@ -79,7 +81,7 @@ class Autoloader extends Singleton {
    */
   private static function getFilesRecursively(string $dir, ?callable $filter = null): array {
     // Return cached results if available
-    $cacheKey = $dir . '_' . ($filter ? spl_object_hash($filter) : 'no_filter');
+    $cacheKey = $dir . '_' . ($filter ? md5(is_object($filter) ? spl_object_hash($filter) : serialize($filter)) : 'no_filter');
     if (isset(self::$filePathCache[$cacheKey])) {
       return self::$filePathCache[$cacheKey];
     }
@@ -91,8 +93,8 @@ class Autoloader extends Singleton {
     }
 
     $iterator = new RecursiveIteratorIterator(
-        new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS),
-        RecursiveIteratorIterator::SELF_FIRST,
+      new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS),
+      RecursiveIteratorIterator::SELF_FIRST,
     );
 
     foreach ($iterator as $fileInfo) {
@@ -159,8 +161,8 @@ PHP . PHP_EOL;
     $root = Fern::getRoot();
     $appPath = self::addTrailingSlash($root) . 'App';
 
-    return self::getFilesRecursively($appPath, fn ($fileInfo) => $fileInfo->isFile()
-        && $fileInfo->getExtension() === 'php'
-        && str_starts_with($fileInfo->getFilename(), '_')  );
+    return self::getFilesRecursively($appPath, fn($fileInfo) => $fileInfo->isFile()
+      && $fileInfo->getExtension() === 'php'
+      && str_starts_with($fileInfo->getFilename(), '_'));
   }
 }

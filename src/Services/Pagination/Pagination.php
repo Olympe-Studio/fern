@@ -69,7 +69,9 @@ class Pagination extends Singleton {
   private function getQuery(): WP_Query {
     if (!$this->wpQuery instanceof WP_Query) {
       global $wp_query;
-      $this->wpQuery = $wp_query;
+
+      // Fallback to a fresh query instance if global is undefined.
+      $this->wpQuery = $wp_query instanceof \WP_Query ? $wp_query : new \WP_Query();
     }
 
     return $this->wpQuery;
