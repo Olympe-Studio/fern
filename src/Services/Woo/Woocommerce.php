@@ -122,24 +122,18 @@ class Woocommerce {
       self::$config = Filters::apply('fern:woo:config', [
         // Currency and Price Settings
 
-        /** @phpstan-ignore-next-line */
         'currency' => html_entity_decode(get_woocommerce_currency(), ENT_QUOTES, 'UTF-8'),
 
-        /** @phpstan-ignore-next-line */
         'currency_symbol' => html_entity_decode(get_woocommerce_currency_symbol(), ENT_QUOTES, 'UTF-8'),
         'currency_position' => get_option('woocommerce_currency_pos'),
 
-        /** @phpstan-ignore-next-line */
         'thousand_separator' => html_entity_decode(WC_get_price_thousand_separator(), ENT_QUOTES, 'UTF-8'),
 
-        /** @phpstan-ignore-next-line */
         'decimal_separator' => html_entity_decode(WC_get_price_decimal_separator(), ENT_QUOTES, 'UTF-8'),
 
-        /** @phpstan-ignore-next-line */
         'price_decimals' => WC_get_price_decimals(),
 
         // Tax Settings
-        /** @phpstan-ignore-next-line */
         'tax_enabled' => WC_tax_enabled(),
         'calc_taxes' => get_option('woocommerce_calc_taxes'),
         'tax_display_shop' => get_option('woocommerce_tax_display_shop'),
@@ -147,13 +141,9 @@ class Woocommerce {
         'prices_include_tax' => get_option('woocommerce_prices_include_tax'),
 
         // Important Pages
-        /** @phpstan-ignore-next-line */
         'cart_page_url' => wc_get_cart_url(),
-        /** @phpstan-ignore-next-line */
         'checkout_page_url' => wc_get_checkout_url(),
-        /** @phpstan-ignore-next-line */
         'account_page_url' => wc_get_account_endpoint_url('dashboard'),
-        /** @phpstan-ignore-next-line */
         'shop_page_url' => get_permalink(wc_get_page_id('shop')),
         'terms_page_url' => get_permalink(get_option('woocommerce_terms_page_id')),
 

@@ -32,7 +32,8 @@
     "friendsofphp/php-cs-fixer": "dev-master",
     "phpstan/phpstan": "2.1.x-dev",
     "szepeviktor/phpstan-wordpress": "2.x-dev",
-    "phpstan/extension-installer": "1.4.x-dev"
+    "phpstan/extension-installer": "1.4.x-dev",
+    "php-stubs/woocommerce-stubs": "dev-master"
   },
   "config": {
     "allow-plugins": {
