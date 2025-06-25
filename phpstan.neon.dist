@@ -3,6 +3,9 @@ parameters:
   paths:
     - src/
 
+  bootstrapFiles:
+    - vendor/php-stubs/woocommerce-stubs/woocommerce-stubs.php
+
   ignoreErrors:
     # WP-CLI specific ignores
     - '#Call to static method .* on an unknown class WP_CLI#'

@@ -89,13 +89,15 @@ trait WooCartActions {
         throw new Exception('Product not found');
       }
 
+      $oldIndex = false;
       if ($cartItemKey) {
         $cartItem = Types::getSafeWpValue($cart->get_cart_item($cartItemKey));
 
         if ($cartItem === null) {
           throw new Exception('Cart item not found');
         }
-        // Remove old item
+
+        $oldIndex = array_search($cartItemKey, array_keys($cart->get_cart()), true);
         $cart->remove_cart_item($cartItemKey);
       }
 
@@ -106,6 +108,15 @@ trait WooCartActions {
         $variationId,
         $variation,
       );
+
+      if ($newKey) {
+        // Store the insertion order for stable sorting
+        $cart->cart_contents[$newKey]['position'] = microtime(true);
+      }
+
+      if ($cartItemKey && $newKey && $oldIndex !== false) {
+        $this->repositionCartItem($cart, $newKey, $oldIndex);
+      }
 
       if (!$newKey) {
         throw new Exception(
@@ -271,14 +282,14 @@ trait WooCartActions {
     $variation = $action->get('variation');
 
     try {
-      $cartItem = Types::getSafeWpValue($this->getCart()->get_cart_item($cartItemKey));
+      $cart = $this->getCart();
+      $cartItem = Types::getSafeWpValue($cart->get_cart_item($cartItemKey));
 
       if ($cartItem === null) {
         throw new Exception('Cart item not found');
       }
 
-      // If only updating quantity, use existing method
-      if (!$variationId && empty($variation)) {
+      if ($variationId === 0 && empty($variation)) {
         $this->updateCartItemQuantity($request);
 
         return new Reply(200, [
@@ -289,17 +300,21 @@ trait WooCartActions {
         ]);
       }
 
-      // If updating variation or both
-      // First remove the old item
-      $this->getCart()->remove_cart_item($cartItemKey);
+      $oldIndex = array_search($cartItemKey, array_keys($cart->get_cart()), true);
 
-      // Add the new variation
-      $newKey = $this->getCart()->add_to_cart(
+      $cart->remove_cart_item($cartItemKey);
+
+      $newKey = $cart->add_to_cart(
         $productId,
         $quantity,
         $variationId,
         $variation,
       );
+
+      if ($newKey && $oldIndex !== false) {
+        $this->repositionCartItem($cart, $newKey, $oldIndex);
+      }
+
       $this->calculateCartTotals();
 
       if (!$newKey) {
@@ -336,7 +351,18 @@ trait WooCartActions {
     }
 
     try {
-      $updated = $this->getCart()->set_quantity($cartItemKey, $quantity);
+      $cart = $this->getCart();
+
+      // Preserve original order by memorising the index before the update
+      $oldIndex = array_search($cartItemKey, array_keys($cart->get_cart()), true);
+
+      $updated = $cart->set_quantity($cartItemKey, $quantity);
+
+      // If WooCommerce internally moved the line we restore it at its previous position
+      if ($updated && $oldIndex !== false) {
+        $this->repositionCartItem($cart, $cartItemKey, $oldIndex);
+      }
+
       $this->calculateCartTotals();
 
       if (!$updated) {
@@ -357,6 +383,42 @@ trait WooCartActions {
         'message' => $e->getMessage(),
       ]);
     }
+  }
+
+  /**
+   * Reinsert a cart item at a specific index
+   *
+   * @param WC_Cart $cart       The WooCommerce cart instance
+   * @param string  $itemKey    The cart item key to move
+   * @param int     $targetIndex The position where the item must be placed
+   */
+  private function repositionCartItem(WC_Cart $cart, string $itemKey, int $targetIndex): void {
+    $contents = $cart->get_cart();
+
+    if (!isset($contents[$itemKey])) {
+      return;
+    }
+
+    $keys = array_keys($contents);
+    $count = count($keys);
+
+    // If target index is out of current bounds, no reposition needed (item already at the end)
+    if ($targetIndex >= $count) {
+      return;
+    }
+
+    // If already in the right spot, nothing to do.
+    if ($keys[$targetIndex] === $itemKey) {
+      return;
+    }
+
+    $item = $contents[$itemKey];
+    unset($contents[$itemKey]);
+
+    $prefix = array_slice($contents, 0, $targetIndex, true);
+    $suffix = array_slice($contents, $targetIndex, null, true);
+
+    $cart->cart_contents = $prefix + [$itemKey => $item] + $suffix;
   }
 
   /**
@@ -406,12 +468,23 @@ trait WooCartActions {
    */
   protected function formatCartItems(WC_Cart $cart): array {
     $cartItems = $cart->get_cart();
+    $formattedItems = [];
 
     if (!is_array($cartItems)) {
       return [];
     }
 
-    return array_map(function ($cart_item_key, $cart_item) {
+    // Sort by stored position if available to keep addition order stable
+    uasort($cartItems, function ($a, $b) {
+      $posA = $a['position'] ?? PHP_INT_MAX;
+      $posB = $b['position'] ?? PHP_INT_MAX;
+      if ($posA === $posB) {
+        return 0;
+      }
+      return ($posA < $posB) ? -1 : 1;
+    });
+
+    foreach ($cartItems as $cart_item_key => $cart_item) {
       try {
         if (!isset($cart_item['data']) || !is_object($cart_item['data'])) {
           throw new Exception('Invalid cart item data');
@@ -454,13 +527,14 @@ trait WooCartActions {
           $item['productData'] = $this->getVariableProductData($parent_product);
         }
 
-        return $item;
+        $formattedItems[] = $item;
       } catch (Exception $e) {
         error_log('Error formatting cart item: ' . $e->getMessage());
-
-        return null;
+        continue;
       }
-    }, array_keys($cartItems), $cartItems);
+    }
+
+    return $formattedItems;
   }
 
   /**
@@ -714,6 +788,10 @@ trait WooCartActions {
     }
 
     $newKey = $cart->add_to_cart($productId, $quantity, $variationId, $variation);
+
+    if ($newKey) {
+      $cart->cart_contents[$newKey]['position'] = microtime(true);
+    }
 
     if (!$newKey) {
       throw new Exception(
