@@ -33,9 +33,11 @@ class Request extends Singleton {
   private int $id;
 
   /**
-   * @var RequestBody The parsed body of the request.
+   * Holds the parsed request payload. Initialized to null to avoid accessing an uninitialised typed property when the request does not contain a body.
+   *
+   * @var RequestBody|null
    */
-  private mixed $body;
+  private mixed $body = '';
 
   /**
    * @var string The content type of the request.
