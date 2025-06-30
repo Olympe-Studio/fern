@@ -54,8 +54,7 @@ trait WooCartActions {
    */
   public function clearCart(Request $_): Reply {
     try {
-      $this->getCart()->empty_cart();
-      $this->calculateCartTotals();
+      $this->resetCart();
 
       return new Reply(200, [
         'success' => true,
@@ -90,6 +89,7 @@ trait WooCartActions {
       }
 
       $oldIndex = false;
+      $oldPosition = null;
       if ($cartItemKey) {
         $cartItem = Types::getSafeWpValue($cart->get_cart_item($cartItemKey));
 
@@ -98,8 +98,14 @@ trait WooCartActions {
         }
 
         $oldIndex = array_search($cartItemKey, array_keys($cart->get_cart()), true);
+        $oldPosition = $cartItem['position'] ?? null;
         $cart->remove_cart_item($cartItemKey);
       }
+
+      // Make sure all existing items already have a valid position so that the
+      // next position we compute for the new item is actually greater than
+      // every other one.
+      $this->ensureCartPositions($cart);
 
       // Add the new/modified item
       $newKey = $cart->add_to_cart(
@@ -111,7 +117,13 @@ trait WooCartActions {
 
       if ($newKey) {
         // Store the insertion order for stable sorting
-        $cart->cart_contents[$newKey]['position'] = microtime(true);
+        if ($cartItemKey && $oldPosition !== null) {
+          // Preserve position when modifying existing item
+          $cart->cart_contents[$newKey]['position'] = $oldPosition;
+        } else {
+          // Assign new position for new items
+          $cart->cart_contents[$newKey]['position'] = $this->getNextCartPosition($cart);
+        }
       }
 
       if ($cartItemKey && $newKey && $oldIndex !== false) {
@@ -282,11 +294,19 @@ trait WooCartActions {
     $variation = $action->get('variation');
 
     try {
+      // Ensure the cart item exists before attempting any WooCommerce mutation to avoid PHP warnings
       $cart = $this->getCart();
-      $cartItem = Types::getSafeWpValue($cart->get_cart_item($cartItemKey));
+      $existingCartItem = Types::getSafeWpValue($cart->get_cart_item($cartItemKey));
 
-      if ($cartItem === null) {
-        throw new Exception('Cart item not found');
+      if ($existingCartItem === null) {
+        // Invalid key – reset the cart to avoid inconsistent state
+        $this->resetCart();
+
+        return new Reply(200, [
+          'success' => true,
+          'message' => 'Cart has been reset',
+          'cart' => $this->formatCartData(),
+        ]);
       }
 
       if ($variationId === 0 && empty($variation)) {
@@ -302,6 +322,9 @@ trait WooCartActions {
 
       $oldIndex = array_search($cartItemKey, array_keys($cart->get_cart()), true);
 
+      // Preserve the position value from the existing item
+      $oldPosition = $existingCartItem['position'] ?? null;
+
       $cart->remove_cart_item($cartItemKey);
 
       $newKey = $cart->add_to_cart(
@@ -310,6 +333,16 @@ trait WooCartActions {
         $variationId,
         $variation,
       );
+
+      if ($newKey) {
+        // Restore the original position if it existed
+        if ($oldPosition !== null) {
+          $cart->cart_contents[$newKey]['position'] = $oldPosition;
+        } else {
+          // If no position existed, assign based on the old index
+          $cart->cart_contents[$newKey]['position'] = 0.001 + ($oldIndex * 0.001);
+        }
+      }
 
       if ($newKey && $oldIndex !== false) {
         $this->repositionCartItem($cart, $newKey, $oldIndex);
@@ -351,7 +384,20 @@ trait WooCartActions {
     }
 
     try {
+      // Ensure the cart item exists before attempting any WooCommerce mutation to avoid PHP warnings
       $cart = $this->getCart();
+      $existingCartItem = Types::getSafeWpValue($cart->get_cart_item($cartItemKey));
+
+      if ($existingCartItem === null) {
+        // Invalid key – reset the cart to avoid inconsistent state
+        $this->resetCart();
+
+        return new Reply(200, [
+          'success' => true,
+          'message' => 'Cart has been reset',
+          'cart' => $this->formatCartData(),
+        ]);
+      }
 
       // Preserve original order by memorising the index before the update
       $oldIndex = array_search($cartItemKey, array_keys($cart->get_cart()), true);
@@ -446,6 +492,8 @@ trait WooCartActions {
         return $this->getEmptyCartData();
       }
 
+      // Items will be sorted later in formatCartItems
+
       return [
         'items' => $this->formatCartItems($cart),
         'subtotal' => Utils::formatPrice(Types::getSafeFloat($cart->get_subtotal())),
@@ -474,15 +522,8 @@ trait WooCartActions {
       return [];
     }
 
-    // Sort by stored position if available to keep addition order stable
-    uasort($cartItems, function ($a, $b) {
-      $posA = $a['position'] ?? PHP_INT_MAX;
-      $posB = $b['position'] ?? PHP_INT_MAX;
-      if ($posA === $posB) {
-        return 0;
-      }
-      return ($posA < $posB) ? -1 : 1;
-    });
+    // Sort by position so smaller values (older items) come first.
+    uasort($cartItems, static fn(array $a, array $b): int => ($a['position'] ?? 0) <=> ($b['position'] ?? 0));
 
     foreach ($cartItems as $cart_item_key => $cart_item) {
       try {
@@ -508,6 +549,8 @@ trait WooCartActions {
           'variation' => $this->validateVariationData($cart_item['variation'] ?? []),
           'short_description' => Types::getSafeString($product->get_short_description('edit')),
           'quantity' => Types::getSafeInt($cart_item['quantity'] ?? 1),
+          'sku' => Types::getSafeString($product->get_sku() ?: ''),
+          'position' => $cart_item['position'],
           'price' => [
             'regular_price' => Utils::formatPrice(Types::getSafeFloat($regular_price)),
             'sale_price' => $product->get_sale_price() ? Utils::formatPrice($sale_price) : null,
@@ -684,6 +727,9 @@ trait WooCartActions {
   private function calculateCartTotals(): void {
     $cart = $this->getCart();
 
+    // Ensure all cart lines have a valid position before totals are calculated or data formatted.
+    $this->ensureCartPositions($cart);
+
     $cart->calculate_shipping();
     $cart->calculate_fees();
 
@@ -790,7 +836,7 @@ trait WooCartActions {
     $newKey = $cart->add_to_cart($productId, $quantity, $variationId, $variation);
 
     if ($newKey) {
-      $cart->cart_contents[$newKey]['position'] = microtime(true);
+      $cart->cart_contents[$newKey]['position'] = $this->getNextCartPosition($cart);
     }
 
     if (!$newKey) {
@@ -825,5 +871,62 @@ trait WooCartActions {
     }
 
     return "{$successCount} of {$totalCount} items added to cart";
+  }
+
+  /**
+   * Empty the cart and recalculate totals
+   */
+  private function resetCart(): void {
+    $cart = $this->getCart();
+
+    $cart->empty_cart();
+    $this->calculateCartTotals();
+  }
+
+  /**
+   * Get the next position value for a new cart item
+   * Ensures new items always appear at the end of the cart
+   *
+   * @param WC_Cart $cart The WooCommerce cart instance
+   * @return float The position value for the new item
+   */
+  private function getNextCartPosition(WC_Cart $cart): float {
+    $cartItems = $cart->get_cart();
+
+    if (empty($cartItems)) {
+      return 1.0;
+    }
+
+    $maxPosition = 0.0;
+
+    foreach ($cartItems as $item) {
+      if (isset($item['position'])) {
+        $maxPosition = max($maxPosition, (float) $item['position']);
+      }
+    }
+
+    // If no items have positions yet, start from 1
+    if ($maxPosition === 0.0) {
+      return 1.0;
+    }
+
+    // Add 1 to ensure the new item comes after the highest positioned item
+    return $maxPosition + 1.0;
+  }
+
+  private function ensureCartPositions(WC_Cart $cart): void {
+    // Guarantee every cart item owns a numeric position so the front-end can sort reliably.
+    $next = $this->getNextCartPosition($cart);
+    foreach ($cart->get_cart() as $key => $item) {
+      if (!isset($item['position'])) {
+        $cart->cart_contents[$key]['position'] = $next;
+        $next += 1.0;
+      }
+    }
+
+    // Persist modifications so next requests keep the value.
+    if (method_exists($cart, 'set_session')) {
+      $cart->set_session();
+    }
   }
 }
