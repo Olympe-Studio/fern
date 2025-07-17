@@ -372,7 +372,39 @@ class Router extends Singleton {
   private function handleAdminController(): ?string {
     $page = $this->request->getUrlParam('page');
 
-    return $this->controllerResolver->resolve('admin', $page);
+    // When the request comes from callAction (X-Fern-Action header) there is no
+    // `page` query parameter.  In that case, try to infer the controller from
+    // the action name by scanning every registered controller class for a
+    // matching public method. If none is found, return null so that the router
+    // can safely bail out instead of throwing a type error.
+    if ($page === null || $page === '') {
+      if ($this->request->isAction()) {
+        $actionName = $this->request->getAction()->getName();
+
+        if ($actionName !== null && $actionName !== '') {
+          // Iterate through all declared classes and find the first controller
+          // exposing the requested action as a public method.
+          foreach (get_declared_classes() as $class) {
+            if (!is_subclass_of($class, Controller::class)) {
+              continue;
+            }
+
+            if (method_exists($class, $actionName)) {
+              $reflection = new ReflectionMethod($class, $actionName);
+              if ($reflection->isPublic() && !$reflection->isStatic()) {
+                /** @var class-string<Controller> $class */
+                return $class;
+              }
+            }
+          }
+        }
+      }
+
+      // No controller could be determined.
+      return null;
+    }
+
+    return $this->controllerResolver->resolve('admin', (string) $page);
   }
 
   /**
