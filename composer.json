@@ -2,7 +2,7 @@
   "name": "fern/core",
   "description": "Yet another wordpress framework",
   "type": "library",
-  "version": "1.4.5",
+  "version": "1.4.6",
   "license": "MIT",
   "autoload": {
     "psr-4": {
