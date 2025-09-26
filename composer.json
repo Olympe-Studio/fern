@@ -27,7 +27,7 @@
     "phpstan": "phpstan analyse src --memory-limit=2048M"
   },
   "require-dev": {
-    "pestphp/pest": "3.x-dev",
+    "pestphp/pest": "4.x-dev",
     "php-stubs/wp-cli-stubs": "dev-master",
     "friendsofphp/php-cs-fixer": "dev-master",
     "phpstan/phpstan": "2.1.x-dev",
