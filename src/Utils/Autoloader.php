@@ -46,26 +46,66 @@ class Autoloader extends Singleton {
   }
 
   /**
+   * Load a specific controller on-demand
+   * 
+   * @param string $controllerClass The fully qualified controller class name
+   * 
+   * @return bool True if controller was loaded successfully
+   */
+  public static function loadController(string $controllerClass): bool {
+
+    if (class_exists($controllerClass, false)) {
+      return true; // Already loaded
+    }
+
+    // Try to get controller info from ControllerResolver registry
+    $resolver = \Fern\Core\Services\Controller\ControllerResolver::getInstance();
+    $registry = $resolver->getControllerRegistry();
+
+    if (isset($registry[$controllerClass])) {
+      $filePath = $registry[$controllerClass]['file_path'];
+      if (file_exists($filePath)) {
+        require_once $filePath;
+
+        $loaded = class_exists($controllerClass, false);
+        return $loaded;
+      }
+    }
+
+    // Fallback: Try to find controller file by convention
+    $root = Fern::getRoot();
+    $className = basename(str_replace('\\', '/', $controllerClass));
+    $controllerPath = self::addTrailingSlash($root) . 'App/Controllers/' . $className . '.php';
+
+    if (file_exists($controllerPath)) {
+      require_once $controllerPath;
+
+      $loaded = class_exists($controllerClass, false);
+      return $loaded;
+    }
+
+    return false;
+  }
+
+  /**
    * Boot the application
    */
   public static function load(): void {
+
     $exists = file_exists(self::getIncludesPath());
 
-    // Include the includes.php file
+    // Always load includes.php (contains only underscore files in both dev and prod)
     if (!Fern::isDev() && $exists) {
       require_once self::getIncludesPath();
-
       return;
     }
 
-    $controllers = self::getControllers();
+    // Get only underscore files (no controllers in any environment)
     $underscoreFiles = self::getUnderscoreFiles();
 
-    $allFiles = array_merge($controllers, $underscoreFiles);
-
-    // Create the includes.php file
+    // Create includes.php with only underscore files
     if (Fern::isDev() || !$exists) {
-      self::createIncludesFile($allFiles);
+      self::createIncludesFile($underscoreFiles);
 
       require_once self::getIncludesPath();
     }
@@ -122,31 +162,32 @@ class Autoloader extends Singleton {
    * @param array<string> $files The files to include
    */
   private static function createIncludesFile(array $files): void {
+    $timestamp = date('Y-m-d H:i:s');
+    $env = Fern::isDev() ? 'development' : 'production';
+    $fileCount = count($files);
+
     $content = <<<PHP
 <?php
-// This file is auto-generated.
-// Do not modify this file directly.
-PHP . PHP_EOL;
+/**
+ * Fern Framework Auto-Generated Includes
+ *
+ * This file is auto-generated. DO NOT MODIFY.
+ *
+ * Generated: {$timestamp}
+ * Environment: {$env}
+ * Files: {$fileCount} (underscore files only)
+ */
 
+declare(strict_types=1);
+
+PHP;
+    $content .= PHP_EOL;
     foreach ($files as $file) {
       $root = Fern::getRoot();
       $relativePath = str_replace($root, '', $file);
       $content .= "require_once __DIR__ . '{$relativePath}';" . PHP_EOL;
     }
-
     file_put_contents(self::getIncludesPath(), $content);
-  }
-
-  /**
-   * Get the controllers
-   *
-   * @return array<string>
-   */
-  private static function getControllers(): array {
-    $root = Fern::getRoot();
-    $dir = self::addTrailingSlash($root) . 'App/Controllers';
-
-    return self::getFilesRecursively($dir);
   }
 
   /**
