@@ -11,6 +11,7 @@ use Fern\Core\Errors\ActionNotFoundException;
 use Fern\Core\Errors\AttributeValidationException;
 use Fern\Core\Errors\RouterException;
 use Fern\Core\Factory\Singleton;
+use Fern\Core\Fern;
 use Fern\Core\Services\Controller\AttributesManager;
 use Fern\Core\Services\Controller\Controller;
 use Fern\Core\Services\Controller\ControllerResolver;
@@ -382,20 +383,18 @@ class Router extends Singleton {
         $actionName = $this->request->getAction()->getName();
 
         if ($actionName !== null && $actionName !== '') {
-          // Iterate through all declared classes and find the first controller
-          // exposing the requested action as a public method.
-          foreach (get_declared_classes() as $class) {
-            if (!is_subclass_of($class, Controller::class)) {
-              continue;
-            }
-
-            if (method_exists($class, $actionName)) {
-              $reflection = new ReflectionMethod($class, $actionName);
-              if ($reflection->isPublic() && !$reflection->isStatic()) {
-                /** @var class-string<Controller> $class */
-                return $class;
-              }
-            }
+          // Use the cached resolver to find controller with action
+          $controllerClass = $this->controllerResolver->findControllerWithAction($actionName);
+          
+          if ($controllerClass !== null) {
+            return $controllerClass;
+          }
+          
+          // In development, log missing action for debugging
+          if (Fern::isDev()) {
+            // Sanitize action name to prevent log injection
+            $sanitizedAction = preg_replace('/[^a-zA-Z0-9_]/', '', $actionName);
+            error_log("Fern: Action '{$sanitizedAction}' not found in controller registry. Consider regenerating the cache.");
           }
         }
       }
@@ -438,7 +437,8 @@ class Router extends Singleton {
         throw new ActionException("Action '{$name}' is reserved or a magic method and cannot be used as an action name.");
       }
 
-      if (!method_exists($controller, $name) || !$this->canRunAction($name, $controller)) {
+      // Check if action exists using the enhanced resolver first
+      if (!$this->controllerResolver->hasAction($ctr, $name) || !$this->canRunAction($name, $controller)) {
         throw new ActionNotFoundException("Action {$name} not found.");
       }
 
@@ -517,21 +517,33 @@ class Router extends Singleton {
   }
 
   /**
-   * Checks if the request should stop the router from resolving.
+   * Checks if the request should stop the router from resolving (optimized order).
    */
   private function shouldStop(): bool {
     $request = $this->request;
 
-    // Fast path: if any of these conditions are true, return immediately
-    if ($request->isCLI() || $request->isXMLRPC() || $request->isAutoSave()) {
+    // Reorder conditions from most common to least common for faster evaluation
+    // REST API calls are most frequent, followed by AJAX, then CRON, etc.
+    if ($request->isREST()) {
+      return true;
+    }
+    
+    if ($request->isAjax() && !$request->isAction()) {
       return true;
     }
 
-    // Consolidate remaining conditions to minimize method calls
-    return $request->isCRON()
-      || $request->isREST()
+    if ($request->isCRON()) {
+      return true;
+    }
+
+    if ($request->isCLI()) {
+      return true;
+    }
+
+    // Less common conditions
+    return $request->isXMLRPC()
+      || $request->isAutoSave()
       || $request->isSitemap()
-      || ($request->isAjax() && !$request->isAction())
       || (is_null(\get_queried_object()) && !$request->isAction() && !$request->is404());
   }
 

@@ -2,7 +2,7 @@
   "name": "fern/core",
   "description": "Yet another wordpress framework",
   "type": "library",
-  "version": "1.4.6",
+  "version": "1.5.0",
   "license": "MIT",
   "autoload": {
     "psr-4": {
@@ -27,7 +27,7 @@
     "phpstan": "phpstan analyse src --memory-limit=2048M"
   },
   "require-dev": {
-    "pestphp/pest": "3.x-dev",
+    "pestphp/pest": "4.x-dev",
     "php-stubs/wp-cli-stubs": "dev-master",
     "friendsofphp/php-cs-fixer": "dev-master",
     "phpstan/phpstan": "2.1.x-dev",
