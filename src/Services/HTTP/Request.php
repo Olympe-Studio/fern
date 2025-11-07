@@ -790,7 +790,7 @@ class Request extends Singleton {
    */
   private function parseBody(): void {
     if (empty($this->contentType)) {
-      $this->body = '';
+      $this->body = [];
 
       return;
     }
@@ -810,7 +810,7 @@ class Request extends Singleton {
     }
 
     if (str_contains($this->contentType, 'application/json')) {
-      $this->body = JSON::decode($input, true) ?: $input;
+      $this->body = JSON::decode($input, true) ?: [];
 
       return;
     }
@@ -822,7 +822,7 @@ class Request extends Singleton {
       return;
     }
 
-    $this->body = $input;
+    $this->body = [];
   }
 
   /**
