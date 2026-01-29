@@ -91,12 +91,10 @@ class Fern extends Singleton {
      * Tipically used to define controllers from within a library
      */
     Events::trigger('fern:core:before_boot');
-    Events::trigger('qm/start', 'fern:boot');
 
     Config::boot($config);
     self::boot();
 
-    Events::trigger('qm/stop', 'fern:boot');
     /**
      * Trigger when Fern is booted.
      *

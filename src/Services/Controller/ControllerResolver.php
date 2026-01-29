@@ -122,7 +122,6 @@ class ControllerResolver extends Singleton {
    * Check if cache is fresh (optimized for production)
    */
   private function isCacheFresh(): bool {
-
     if (!file_exists($this->cacheFilePath)) {
       return false;
     }

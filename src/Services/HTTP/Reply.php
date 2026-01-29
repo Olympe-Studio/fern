@@ -402,7 +402,7 @@ class Reply {
 
     if (!headers_sent()) {
       header('Content-Type: ' . $this->contentType . '; charset=' . get_option('blog_charset'));
-      http_response_code($this->status);
+      @http_response_code($this->status);
     }
 
     $body = $this->getBody();
@@ -461,7 +461,6 @@ class Reply {
      * @param Reply $reply The current Reply instance.
      */
     Events::trigger('fern:core:reply:has_been_sent', $this);
-    Events::trigger('qm/stop', 'fern:resolve_routes');
 
     // For action requests, ensure clean exit without Query Monitor interference
     if ($req->isAction()) {

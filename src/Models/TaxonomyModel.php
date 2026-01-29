@@ -169,13 +169,13 @@ abstract class TaxonomyModel {
    */
   public static function getCounts(): array {
     $total = wp_count_terms(['taxonomy' => static::getTaxonomy()]);
-    $totalCount = is_wp_error($total) ? 0 : (int) $total;
+    $totalCount = $total instanceof WP_Error ? 0 : (int) $total;
 
     $withPosts = wp_count_terms([
       'taxonomy' => static::getTaxonomy(),
       'hide_empty' => true,
     ]);
-    $withPostsCount = is_wp_error($withPosts) ? 0 : (int) $withPosts;
+    $withPostsCount = $withPosts instanceof WP_Error ? 0 : (int) $withPosts;
 
     return [
       'total' => $totalCount,

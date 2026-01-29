@@ -146,7 +146,7 @@ class FernControllerCommand {
       /** @var int|WP_Error $pageId */
       $pageId = wp_insert_post($pageArgs);
 
-      if (is_wp_error($pageId)) {
+      if ($pageId instanceof WP_Error) {
         WP_CLI::error('Failed to create the page: ' . $pageId->get_error_message());
 
         return false;

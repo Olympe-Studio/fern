@@ -6,10 +6,13 @@ namespace Fern\Core\Services\Woo;
 
 use \WC_Cart;
 use Exception;
+use Fern\Core\Services\Actions\Attributes\RequireCapabilities;
 use Fern\Core\Services\HTTP\Reply;
 use Fern\Core\Services\HTTP\Request;
 use Fern\Core\Utils\Types;
 use Fern\Core\Wordpress\Filters;
+use WC_Coupon;
+use WC_Discounts;
 use WC_Product;
 use WC_Product_Variable;
 
@@ -219,6 +222,51 @@ trait WooCartActions {
       'message' => Woocommerce::getText('success.coupon_applied'),
       'cart' => $this->formatCartData(),
     ]);
+  }
+
+  /**
+   * Validate a coupon code without applying it.
+   *
+   * Only available to editor+ users (used for share-cart links).
+   */
+  public function validateCoupon(Request $request): Reply {
+    $action = $request->getAction();
+    $couponCode = sanitize_text_field((string) ($action->get('coupon') ?? ''));
+
+    if ($couponCode === '') {
+      return new Reply(200, [
+        'success' => false,
+        'valid' => false,
+        'message' => Woocommerce::getText('errors.invalid_coupon'),
+      ]);
+    }
+
+    try {
+      $cart = $this->getCart();
+      $coupon = new WC_Coupon($couponCode);
+      $discounts = new WC_Discounts($cart);
+
+      $valid = $discounts->is_coupon_valid($coupon);
+
+      if ($valid instanceof \WP_Error) {
+        return new Reply(200, [
+          'success' => false,
+          'valid' => false,
+          'message' => $valid->get_error_message(),
+        ]);
+      }
+
+      return new Reply(200, [
+        'success' => true,
+        'valid' => true,
+      ]);
+    } catch (Exception $e) {
+      return new Reply(200, [
+        'success' => false,
+        'valid' => false,
+        'message' => $e->getMessage(),
+      ]);
+    }
   }
 
   /**
@@ -500,8 +548,10 @@ trait WooCartActions {
         'total' => Utils::formatPrice(Types::getSafeFloat($cart->get_total(''))),
         'item_count' => Types::getSafeInt($cart->get_cart_contents_count()),
         'tax_total' => Utils::formatPrice(Types::getSafeFloat($cart->get_total_tax())),
+        'tax_total_numeric' => Types::getSafeFloat($cart->get_total_tax()),
         'needs_shipping' => (bool) $cart->needs_shipping(),
         'shipping_total' => Utils::formatPrice(Types::getSafeFloat($cart->get_shipping_total())),
+        'shipping_total_numeric' => Types::getSafeFloat($cart->get_shipping_total()),
         'meta_data' => Filters::apply('fern:woo:cart_meta_data', []),
       ];
     } catch (Exception $e) {
@@ -685,8 +735,10 @@ trait WooCartActions {
       'total' => Utils::formatPrice(0),
       'item_count' => 0,
       'tax_total' => Utils::formatPrice(0),
+      'tax_total_numeric' => 0,
       'needs_shipping' => false,
       'shipping_total' => Utils::formatPrice(0),
+      'shipping_total_numeric' => 0,
     ];
   }
 
