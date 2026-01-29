@@ -248,7 +248,7 @@ trait WooCartActions {
 
       $valid = $discounts->is_coupon_valid($coupon);
 
-      if (is_wp_error($valid)) {
+      if ($valid instanceof \WP_Error) {
         return new Reply(200, [
           'success' => false,
           'valid' => false,
@@ -548,8 +548,10 @@ trait WooCartActions {
         'total' => Utils::formatPrice(Types::getSafeFloat($cart->get_total(''))),
         'item_count' => Types::getSafeInt($cart->get_cart_contents_count()),
         'tax_total' => Utils::formatPrice(Types::getSafeFloat($cart->get_total_tax())),
+        'tax_total_numeric' => Types::getSafeFloat($cart->get_total_tax()),
         'needs_shipping' => (bool) $cart->needs_shipping(),
         'shipping_total' => Utils::formatPrice(Types::getSafeFloat($cart->get_shipping_total())),
+        'shipping_total_numeric' => Types::getSafeFloat($cart->get_shipping_total()),
         'meta_data' => Filters::apply('fern:woo:cart_meta_data', []),
       ];
     } catch (Exception $e) {
@@ -733,8 +735,10 @@ trait WooCartActions {
       'total' => Utils::formatPrice(0),
       'item_count' => 0,
       'tax_total' => Utils::formatPrice(0),
+      'tax_total_numeric' => 0,
       'needs_shipping' => false,
       'shipping_total' => Utils::formatPrice(0),
+      'shipping_total_numeric' => 0,
     ];
   }
 

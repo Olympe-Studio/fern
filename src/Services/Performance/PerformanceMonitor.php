@@ -69,11 +69,6 @@ class PerformanceMonitor {
       'start_time' => microtime(true),
       'start_memory' => memory_get_usage(true),
     ];
-
-    // Start QM timer only if WordPress is loaded
-    if (function_exists('do_action') && function_exists('QM')) {
-      do_action('qm/start', $timerName);
-    }
   }
 
   /**
@@ -88,11 +83,6 @@ class PerformanceMonitor {
     }
 
     $timerName = self::formatTimerName($name, $category);
-
-    // Stop QM timer only if WordPress is loaded
-    if (function_exists('do_action') && function_exists('QM')) {
-      do_action('qm/stop', $timerName);
-    }
 
     // Calculate our own statistics
     if (isset(self::$activeTimers[$timerName])) {
@@ -133,10 +123,6 @@ class PerformanceMonitor {
 
     $timerName = self::formatTimerName($name, $category);
 
-    // Record QM lap only if WordPress is loaded
-    if (function_exists('do_action') && function_exists('QM')) {
-      do_action('qm/lap', $timerName);
-    }
   }
 
   /**
@@ -153,10 +139,6 @@ class PerformanceMonitor {
     // Store internally for our own reporting
     // (In a real implementation, we'd use a proper debug log)
     
-    // Only use QM if WordPress is loaded
-    if (function_exists('do_action') && function_exists('QM')) {
-      do_action('qm/debug', $message, ['category' => $category]);
-    }
   }
 
   /**

@@ -6,7 +6,6 @@ namespace Fern\Core\Services\Views;
 
 use Fern\Core\Config;
 use Fern\Core\Context;
-use Fern\Core\Wordpress\Events;
 use Fern\Core\Wordpress\Filters;
 use InvalidArgumentException;
 
@@ -60,16 +59,12 @@ class Views {
      * @return array
      */
     $data = Filters::apply('fern:core:views:data', $data);
-    Events::trigger('qm/stop', 'fern:make_all_queries');
 
     if (!is_array($data)) {
       throw new InvalidArgumentException('Invalid data. Views data must be an array, received: ' . gettype($data) . '.');
     }
 
-    Events::trigger('qm/start', 'fern:render_view');
-    Events::trigger('qm/start', 'fern:render_raw');
     $result = $engine->render($template, $data);
-    Events::trigger('qm/stop', 'fern:render_raw');
 
     /**
      * Allow result modification for views
@@ -79,7 +74,6 @@ class Views {
      * @return string
      */
     $result = Filters::apply('fern:core:views:result', $result);
-    Events::trigger('qm/stop', 'fern:render_view');
 
     return $result;
   }

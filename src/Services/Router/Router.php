@@ -17,7 +17,6 @@ use Fern\Core\Services\Controller\Controller;
 use Fern\Core\Services\Controller\ControllerResolver;
 use Fern\Core\Services\HTTP\Reply;
 use Fern\Core\Services\HTTP\Request;
-use Fern\Core\Wordpress\Events;
 use Fern\Core\Wordpress\Filters;
 use ReflectionMethod;
 use Throwable;
@@ -133,12 +132,10 @@ class Router extends Singleton {
    * Resolves the request and calls the appropriate controller.
    */
   public function resolve(): void {
-    Events::trigger('qm/start', 'fern:resolve_routes');
     $req = $this->request;
 
     // Pass back to WP.
     if ($this->shouldStop()) {
-      Events::trigger('qm/stop', 'fern:resolve_routes');
       $this->didPass = true;
       return;
     }
@@ -180,11 +177,8 @@ class Router extends Singleton {
 
     if ($reply instanceof Reply) {
       $reply->code(404);
-      Events::trigger('qm/stop', 'fern:resolve_routes');
       $reply->send();
     } else {
-      Events::trigger('qm/stop', 'fern:resolve_routes');
-
       throw new RouterException('Controller handle method must return a Reply object ready to be sent.');
     }
   }
@@ -500,7 +494,6 @@ class Router extends Singleton {
    * @param string $controller The controller to handle the request
    */
   private function handleGetRequest(string $controller): void {
-    Events::trigger('qm/start', 'fern:make_all_queries');
     $reply = $controller::getInstance()->handle($this->request);
 
     if ($reply instanceof Reply) {

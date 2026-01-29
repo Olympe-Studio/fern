@@ -80,11 +80,13 @@ class Remote implements RenderingEngine {
       'sslverify' => $this->sslverify,
     ]);
 
-    if (is_wp_error($response)) {
+    if ($response instanceof \WP_Error) {
       throw new InvalidArgumentException('Failed to fetch template from remote server. Check that the URL is correct. WP Error: ' . $response->get_error_message());
     }
 
-    return wp_remote_retrieve_body($response);
+    $responseBody = wp_remote_retrieve_body($response);
+
+    return $responseBody;
   }
 
   /**
