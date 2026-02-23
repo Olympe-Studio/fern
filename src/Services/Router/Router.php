@@ -12,6 +12,7 @@ use Fern\Core\Errors\AttributeValidationException;
 use Fern\Core\Errors\RouterException;
 use Fern\Core\Factory\Singleton;
 use Fern\Core\Fern;
+use Fern\Core\Logger\Logger;
 use Fern\Core\Services\Controller\AttributesManager;
 use Fern\Core\Services\Controller\Controller;
 use Fern\Core\Services\Controller\ControllerResolver;
@@ -451,7 +452,18 @@ class Router extends Singleton {
       $reply = $controller->{$name}($this->request, $action);
       $reply->send();
     } catch (Throwable $e) {
-      $reply = new Reply(500, $e->getMessage(), 'text/plain');
+      $errorId = $this->createErrorId('router_action');
+      Logger::error('Router action execution failed', [
+        'error_id' => $errorId,
+        'controller' => $ctr,
+        'action' => $action->getName(),
+        'exception' => get_class($e),
+        'message' => $e->getMessage(),
+        'file' => $e->getFile(),
+        'line' => $e->getLine(),
+      ]);
+
+      $reply = new Reply(500, "Internal Server Error. Reference: {$errorId}", 'text/plain');
       $reply->send();
     }
   }
@@ -471,7 +483,10 @@ class Router extends Singleton {
       );
     } catch (AttributeValidationException $e) {
       // Hide the error from the user
-      error_log($e->getMessage());
+      Logger::warning('Action attribute validation failed', [
+        'exception' => get_class($e),
+        'message' => $e->getMessage(),
+      ]);
 
       return false;
     }
@@ -486,6 +501,17 @@ class Router extends Singleton {
    */
   private function isReservedOrMagicMethod(string $methodName): bool {
     return in_array($methodName, self::RESERVED_ACTIONS, true) || str_starts_with($methodName, '_');
+  }
+
+  /**
+   * Create a stable correlation ID to connect client errors to server logs.
+   */
+  private function createErrorId(string $prefix): string {
+    if (function_exists('wp_generate_uuid4')) {
+      return $prefix . '_' . wp_generate_uuid4();
+    }
+
+    return $prefix . '_' . uniqid('', true);
   }
 
   /**
