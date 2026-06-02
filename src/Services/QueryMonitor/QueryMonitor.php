@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Fern\Core\Services\QueryMonitor;
 
 use Fern\Core\Services\HTTP\Request;

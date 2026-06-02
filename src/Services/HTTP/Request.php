@@ -366,6 +366,8 @@ class Request extends Singleton {
 
   /**
    * Force the current Request to be a 404.
+   *
+   * @codeCoverageIgnore Terminates the process via exit; not unit-testable in-process.
    */
   public function set404(): never {
     global $wp_query;
@@ -836,9 +838,11 @@ class Request extends Singleton {
       return;
     }
 
-    $input = file_get_contents('php://input');
+    $input = $this->readInput();
 
     if ($input === false || $input === '') {
+      $this->body = [];
+
       return;
     }
 
@@ -859,6 +863,17 @@ class Request extends Singleton {
     }
 
     $this->body = [];
+  }
+
+  /**
+   * Reads the raw request body.
+   *
+   * Isolated behind a method so tests can supply input.
+   *
+   * @codeCoverageIgnore Reads php://input, which cannot be populated in-process.
+   */
+  protected function readInput(): string|false {
+    return file_get_contents('php://input');
   }
 
   /**

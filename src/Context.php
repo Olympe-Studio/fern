@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Fern\Core;
 
 use Fern\Core\Factory\Singleton;

@@ -51,7 +51,7 @@ class Router extends Singleton {
 
   /**
    */
-  private AttributesManager $attributeManagerr;
+  private AttributesManager $attributeManager;
 
   /**
    */
@@ -76,7 +76,7 @@ class Router extends Singleton {
     /** @var RouterConfig $config */
     $this->config = $config;
     $this->controllerResolver = ControllerResolver::getInstance();
-    $this->attributeManagerr = AttributesManager::getInstance();
+    $this->attributeManager = AttributesManager::getInstance();
     $this->didPass = false;
   }
 
@@ -488,7 +488,7 @@ class Router extends Singleton {
    */
   private function canRunAction(string $name, object $controller): bool {
     try {
-      $validation = $this->attributeManagerr->validateMethod(
+      $validation = $this->attributeManager->validateMethod(
         $controller,
         $name,
         $this->request,

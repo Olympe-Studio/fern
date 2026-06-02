@@ -1,6 +1,6 @@
 <?php declare(strict_types=1);
 
-namespace Fern\Services\HTTP;
+namespace Fern\Core\Services\HTTP;
 
 class FileConstants {
   /**

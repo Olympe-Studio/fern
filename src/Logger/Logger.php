@@ -65,6 +65,17 @@ class Logger extends Singleton {
   public static function getLogFolder(): string {
     $wpDebugLog = defined('WP_DEBUG_LOG') ? constant('WP_DEBUG_LOG') : false;
 
+    return self::resolveLogFolder($wpDebugLog);
+  }
+
+  /**
+   * Resolves and ensures the log directory for a given WP_DEBUG_LOG value.
+   *
+   * Isolated from the constant read so the path logic is testable.
+   *
+   * @throws RuntimeException If unable to create log directory
+   */
+  protected static function resolveLogFolder(mixed $wpDebugLog): string {
     // WP_DEBUG_LOG can be a string path at runtime; the WordPress stubs model it as bool only.
     $path = is_string($wpDebugLog)
       ? $wpDebugLog
@@ -75,9 +86,12 @@ class Logger extends Singleton {
       : rtrim($path, '/');
 
     if (!is_dir($path) && !mkdir($path, 0777, true) && !is_dir($path)) {
+      // @codeCoverageIgnoreStart
+      // Defensive: only reached on a genuine mkdir failure (permissions/race).
       throw new RuntimeException(
         sprintf('Directory "%s" was not created', $path),
       );
+      // @codeCoverageIgnoreEnd
     }
 
     return $path;

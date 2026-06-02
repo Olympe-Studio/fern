@@ -200,7 +200,7 @@ trait WooCartActions {
 
     $appliedCoupons = $this->getCart()->get_applied_coupons();
 
-    if (!is_array($appliedCoupons) || !in_array($coupon, $appliedCoupons, true)) {
+    if (is_array($appliedCoupons) && in_array($coupon, $appliedCoupons, true)) {
       return new Reply(400, [
         'success' => false,
         'message' => Woocommerce::getText('errors.already_applied'),

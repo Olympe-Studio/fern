@@ -1,17 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.3/phpunit.xsd"
-         bootstrap="vendor/autoload.php"
+         bootstrap="tests/bootstrap.php"
          colors="true"
 >
     <testsuites>
-        <testsuite name="Test Suite">
-            <directory suffix="Test.php">./tests</directory>
+        <testsuite name="unit">
+            <directory suffix="Test.php">./tests/Unit</directory>
+        </testsuite>
+        <testsuite name="feature">
+            <directory suffix="Test.php">./tests/Feature</directory>
+        </testsuite>
+        <testsuite name="arch">
+            <directory suffix="Test.php">./tests/Arch</directory>
         </testsuite>
     </testsuites>
     <source>
         <include>
             <directory suffix=".php">./src</directory>
         </include>
+        <exclude>
+            <!-- Code-generation templates copied verbatim by the CLI; not runtime units. -->
+            <directory suffix=".php">./src/CLI/templates</directory>
+        </exclude>
     </source>
 </phpunit>

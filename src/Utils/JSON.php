@@ -49,6 +49,8 @@ final class JSON {
       return json_validate($json, $depth, $validatedFlags);
     }
 
+    // @codeCoverageIgnoreStart
+    // Legacy fallback: json_validate() is always available on PHP 8.3+.
     try {
       json_decode($json, true, $depth, $flags | JSON_THROW_ON_ERROR);
 
@@ -56,6 +58,7 @@ final class JSON {
     } catch (JsonException) {
       return false;
     }
+    // @codeCoverageIgnoreEnd
   }
 
   /**

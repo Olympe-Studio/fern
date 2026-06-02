@@ -904,7 +904,6 @@ PHP;
     }
 
     $handleProperty = $reflection->getProperty('handle');
-    $handleProperty->setAccessible(true);
     $handleValue = $handleProperty->getValue();
 
     if ($handleValue === '_default') {

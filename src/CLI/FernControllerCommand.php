@@ -63,14 +63,14 @@ class FernControllerCommand {
 
     if (!file_exists($templatePath)) {
       WP_CLI::error("Template file not found at {$templatePath}");
-      exit;
+      $this->terminate();
     }
 
     $templateContent = file_get_contents($templatePath);
 
     if ($templateContent === false || $templateContent === '') {
       WP_CLI::error('Failed to read template file.');
-      exit;
+      $this->terminate();
     }
 
     $namespace = 'App\\Controllers' . ($subdir === '' ? '' : '\\' . $subdir);
@@ -97,14 +97,28 @@ class FernControllerCommand {
     // Check if the file already exists
     if (file_exists($outputFile)) {
       WP_CLI::error("A controller named {$name} already exists.");
+
+      return;
     }
 
     // Write the new controller file
     if (file_put_contents($outputFile, $controllerContent) === false) {
       WP_CLI::error('Failed to create controller file.');
+
+      return;
     }
 
     WP_CLI::success("Controller {$name} created successfully in " . realpath($outputFile));
+  }
+
+  /**
+   * Terminates the command. Isolated behind a method so tests can intercept it
+   * instead of exiting the whole process.
+   *
+   * @codeCoverageIgnore
+   */
+  protected function terminate(): never {
+    exit;
   }
 
   /**
