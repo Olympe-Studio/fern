@@ -7,6 +7,7 @@ namespace Fern\Core\Services\Controller;
 use Fern\Core\Errors\ControllerRegistration;
 use Fern\Core\Factory\Singleton;
 use Fern\Core\Services\HTTP\Request;
+use Fern\Core\Utils\Types;
 use Fern\Core\Wordpress\Events;
 use Fern\Core\Wordpress\Filters;
 use ReflectionClass;
@@ -19,6 +20,14 @@ use Fern\Core\Fern;
  *   admin: array<string, class-string<Controller>>,
  *   default: ?class-string<Controller>,
  *   _404: ?class-string<Controller>
+ * }
+ * @phpstan-type ControllerRegistryEntry array{
+ *   type: string,
+ *   handle: string,
+ *   traits: array<int, string>,
+ *   actions: array<int, string>,
+ *   file_path: string,
+ *   file_mtime: int
  * }
  */
 class ControllerResolver extends Singleton {
@@ -62,14 +71,7 @@ class ControllerResolver extends Singleton {
   private string $cacheFilePath;
 
   /**
-   * @var array<string, array{
-   *   type: string,
-   *   handle: string,
-   *   traits: array<string>,
-   *   actions: array<string>,
-   *   file_path: string,
-   *   file_mtime: int
-   * }> Complete controller registry with actions
+   * @var array<string, ControllerRegistryEntry> Complete controller registry with actions
    */
   private static array $controllerRegistry = [];
 
@@ -79,6 +81,8 @@ class ControllerResolver extends Singleton {
   private static bool $registryLoaded = false;
 
   public function __construct() {
+    parent::__construct();
+
     $this->controllers = [
       self::TYPE_VIEW => [],
       self::TYPE_ADMIN => [],
@@ -161,6 +165,7 @@ class ControllerResolver extends Singleton {
     );
 
     foreach ($iterator as $file) {
+      /** @var \SplFileInfo $file */
       if ($file->isFile() && $file->getExtension() === 'php') {
         if ($file->getMTime() > $cacheTime) {
           return false; // Found newer controller file
@@ -189,6 +194,7 @@ class ControllerResolver extends Singleton {
 
     $fileCount = 0;
     foreach ($iterator as $file) {
+      /** @var \SplFileInfo $file */
       if ($file->isFile() && $file->getExtension() === 'php') {
         $this->processControllerFile($file->getPathname());
         $fileCount++;
@@ -205,9 +211,6 @@ class ControllerResolver extends Singleton {
 
     // Extract class name from file path
     $className = $this->extractClassNameFromFile($filePath);
-    if (!$className) {
-      return;
-    }
 
     // Process the class if it exists
     if (class_exists($className)) {
@@ -218,7 +221,7 @@ class ControllerResolver extends Singleton {
   /**
    * Extract class name from controller file path
    */
-  private function extractClassNameFromFile(string $filePath): ?string {
+  private function extractClassNameFromFile(string $filePath): string {
     // Convert file path to namespace
     $relativePath = str_replace(Fern::getRoot() . '/App/Controllers/', '', $filePath);
     $relativePath = str_replace('.php', '', $relativePath);
@@ -245,18 +248,19 @@ class ControllerResolver extends Singleton {
       return;
     }
 
-    /** @var ReflectionClass<Controller> $reflection */
     $this->validateControllerClass($reflection);
 
     $type = $this->determineControllerType($reflection);
-    $handle = (string) $reflection->getProperty('handle')->getValue();
+    $handle = Types::getSafeString($reflection->getProperty('handle')->getValue());
 
     // Extract all public actions (methods without "_" prefix)
     $actions = $this->extractControllerActions($reflection);
 
     // Get file information
-    $filePath = $reflection->getFileName() ?: '';
-    $fileMtime = $filePath ? filemtime($filePath) : 0;
+    $fileName = $reflection->getFileName();
+    $filePath = $fileName === false ? '' : $fileName;
+    $mtime = $filePath !== '' ? filemtime($filePath) : false;
+    $fileMtime = $mtime === false ? 0 : $mtime;
 
     // Store complete controller info in registry
     self::$controllerRegistry[$className] = [
@@ -265,7 +269,7 @@ class ControllerResolver extends Singleton {
       'traits' => $reflection->getTraitNames(),
       'actions' => $actions,
       'file_path' => $filePath,
-      'file_mtime' => $fileMtime ?: 0,
+      'file_mtime' => $fileMtime,
     ];
 
     $this->register($type, $handle, $className);
@@ -273,6 +277,10 @@ class ControllerResolver extends Singleton {
 
   /**
    * Extract all public action methods from controller
+   *
+   * @param ReflectionClass<object> $reflection
+   *
+   * @return array<int, string>
    */
   private function extractControllerActions(ReflectionClass $reflection): array {
     $actions = [];
@@ -402,9 +410,11 @@ PHP;
 
   /**
    * Format array for export with proper indentation
+   *
+   * @param array<int, string> $array
    */
   private function formatArrayForExport(array $array, int $indent): string {
-    if (empty($array)) {
+    if ($array === []) {
       return '[]';
     }
 
@@ -433,16 +443,27 @@ PHP;
     try {
       $cached = include $this->cacheFilePath;
 
-      if (!is_array($cached) || !isset($cached['controllers']) || !isset($cached['metadata'])) {
+      if (
+        !is_array($cached)
+        || !isset($cached['controllers'], $cached['metadata'])
+        || !is_array($cached['controllers'])
+        || !is_array($cached['metadata'])
+      ) {
         return false;
       }
 
-      // Validate cache version
-      if ($cached['metadata']['version'] !== Fern::getVersion()) {
+      if (($cached['metadata']['version'] ?? null) !== Fern::getVersion()) {
         return false;
       }
 
-      self::$controllerRegistry = $cached['controllers'];
+      /** @var array<string, ControllerRegistryEntry> $cachedControllers */
+      $cachedControllers = $cached['controllers'];
+
+      if (!$this->cachedControllerFilesAreFresh($cachedControllers)) {
+        return false;
+      }
+
+      self::$controllerRegistry = $cachedControllers;
       self::$registryLoaded = true;
 
       // Register controllers from cache
@@ -451,11 +472,53 @@ PHP;
       return true;
     } catch (\Throwable) {
       // Cache file corrupted, remove it safely
-      if (file_exists($this->cacheFilePath) && is_writable($this->cacheFilePath)) {
+      if (is_writable($this->cacheFilePath)) {
         unlink($this->cacheFilePath);
       }
       return false;
     }
+  }
+
+  /**
+   * Validate cached controller paths without scanning the whole controller tree.
+   *
+   * @param array<string, array<string, mixed>> $controllers
+   */
+  private function cachedControllerFilesAreFresh(array $controllers): bool {
+    foreach ($controllers as $className => $info) {
+      if (!isset($info['file_mtime'])) {
+        return false;
+      }
+
+      $path = $this->resolveCachedControllerPath($className, $info);
+      $mtime = file_exists($path) ? filemtime($path) : false;
+
+      if ($mtime === false || $mtime !== Types::getSafeInt($info['file_mtime'])) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * @param array<string, mixed> $info
+   */
+  private function resolveCachedControllerPath(string $className, array $info): string {
+    $path = isset($info['file_path']) ? Types::getSafeString($info['file_path']) : '';
+
+    if ($path !== '' && file_exists($path)) {
+      return $path;
+    }
+
+    return $this->controllerPathForClass($className);
+  }
+
+  private function controllerPathForClass(string $className): string {
+    $relative = str_replace('App\\Controllers\\', '', $className);
+    $relative = str_replace('\\', '/', $relative);
+
+    return Fern::getRoot() . '/App/Controllers/' . $relative . '.php';
   }
 
   /**
@@ -494,7 +557,7 @@ PHP;
 
     // In production, controllers are already cached - skip expensive scanning
     // In development, only scan if registry is empty or incomplete
-    if (Fern::isDev() && (empty(self::$controllerRegistry) || !self::$registryLoaded)) {
+    if (Fern::isDev() && (self::$controllerRegistry === [] || !self::$registryLoaded)) {
       $declaredClasses = get_declared_classes();
       foreach ($declaredClasses as $className) {
         $instance->processClass($className);
@@ -506,6 +569,8 @@ PHP;
 
   /**
    * Get all actions for a controller
+   *
+   * @return array<int, string>
    */
   public function getControllerActions(string $controllerClass): array {
     if (!Fern::isDev() && isset(self::$controllerRegistry[$controllerClass])) {
@@ -616,16 +681,13 @@ PHP;
         return;
       }
 
-      /** @var ReflectionClass<object> $ref */
-      $ref = $reflection;
-      $this->reflectionCache[$className] = $ref;
+      $this->reflectionCache[$className] = $reflection;
     }
 
-    /** @var ReflectionClass<Controller> $reflection */
     $this->validateControllerClass($reflection);
 
     $type = $this->determineControllerType($reflection);
-    $handle = (string) $reflection->getProperty('handle')->getValue();
+    $handle = Types::getSafeString($reflection->getProperty('handle')->getValue());
 
     $this->register($type, $handle, $reflection->getName());
   }
@@ -633,20 +695,19 @@ PHP;
   /**
    * Register a controller.
    *
-   * @param string                   $type       The type of the controller (view, admin, or default)
-   * @param string                   $handle     The handle of the controller
-   * @param class-string<Controller> $controller
+   * @param string $type       The type of the controller (view, admin, or default)
+   * @param string $handle     The handle of the controller
+   * @param string $controller The fully-qualified controller class name
    */
   public function register(string $type, string $handle, string $controller): void {
+    /** @var class-string<Controller> $controller */
     if ($type === self::TYPE_DEFAULT) {
-      /** @var class-string<Controller> $controller */
       $this->controllers[self::TYPE_DEFAULT] = $controller;
 
       return;
     }
 
     if ($type === self::TYPE_404) {
-      /** @var class-string<Controller> $controller */
       $this->controllers[self::TYPE_404] = $controller;
 
       return;
@@ -669,13 +730,13 @@ PHP;
    */
   public function resolve(string $type, string $handle): string|null {
 
-    $handle = Filters::apply('fern:core:controller_resolve', $handle, $type);
+    $handle = Types::getSafeString(Filters::apply('fern:core:controller_resolve', $handle, $type));
     $handle = self::PREFIX . $handle;
 
     $controllerClass = $this->controllers[$type][$handle] ?? null;
 
     // Optimize controller loading: only check class existence in development
-    if ($controllerClass) {
+    if ($controllerClass !== null) {
       if (Fern::isDev() && !class_exists($controllerClass, false)) {
         \Fern\Core\Utils\Autoloader::loadController($controllerClass);
       } elseif (!Fern::isDev()) {
@@ -694,7 +755,7 @@ PHP;
 
     $default = $this->controllers[self::TYPE_DEFAULT];
 
-    if (!$default) {
+    if ($default === null) {
       throw new ControllerRegistration('No default controller registered. Please register a default controller in  /App/Controller with handle set to `_default`.');
     }
 
@@ -716,7 +777,7 @@ PHP;
 
     $notFound = $this->controllers[self::TYPE_404];
 
-    if (!$notFound) {
+    if ($notFound === null) {
       throw new ControllerRegistration('No NotFound controller registered. Please register a 404 controller in  /App/Controller with handle set to `_404`.');
     }
 
@@ -739,95 +800,81 @@ PHP;
   private function registerAdminMenu(string $controllerClass): void {
     $controller = $controllerClass::getInstance();
 
-    if (!method_exists($controller, 'configure')) {
+    if (!is_object($controller) || !method_exists($controller, 'configure')) {
       return;
     }
 
-    /** @phpstan-ignore-next-line */
     $config = $controller->configure();
 
     // Validate required configuration
-    if (!isset($config['page_title']) || !isset($config['menu_title'])) {
+    if (!is_array($config) || !isset($config['page_title'], $config['menu_title'])) {
       throw new ControllerRegistration("Admin controller {$controllerClass} must provide 'page_title' and 'menu_title' in configure()");
     }
 
-    // Set default values for optional parameters
-    $defaults = [
-      'capability' => 'manage_options',
-      'menu_slug' => '',
-      'icon' => '',
-      'position' => null,
-      'parent_slug' => null,
-    ];
-
-    $config = array_merge($defaults, $config);
-
     // Override the menu slug with the controller's handle
     $reflection = new ReflectionClass($controllerClass);
-    $handle = $reflection->getProperty('handle')->getValue();
-    $config['menu_slug'] = $handle;
+    $menuSlug = Types::getSafeString($reflection->getProperty('handle')->getValue());
+
+    $pageTitle = Types::getSafeString($config['page_title']);
+    $menuTitle = Types::getSafeString($config['menu_title']);
+    $capability = Types::getSafeString($config['capability'] ?? 'manage_options');
+    $icon = Types::getSafeString($config['icon'] ?? '');
+    $parentSlug = Types::getSafeString($config['parent_slug'] ?? '');
+
+    $rawPosition = $config['position'] ?? null;
+    $position = (is_int($rawPosition) || is_float($rawPosition)) ? $rawPosition : null;
 
     // Override the callback with the controller's handle
     $callback = function () use ($controllerClass): void {
       $controller = $controllerClass::getInstance();
+
+      if (!is_object($controller) || !method_exists($controller, 'handle')) {
+        return;
+      }
+
       $reply = $controller->handle(Request::getCurrent());
-      $reply->send();
+
+      if (is_object($reply) && method_exists($reply, 'send')) {
+        $reply->send();
+      }
     };
 
     // Register the menu based on whether it's a submenu or top-level menu
-    if ($config['parent_slug']) {
-      add_submenu_page(
-        $config['parent_slug'],
-        $config['page_title'],
-        $config['menu_title'],
-        $config['capability'],
-        $config['menu_slug'],
-        $callback,
-      );
-    } else {
-      add_menu_page(
-        $config['page_title'],
-        $config['menu_title'],
-        $config['capability'],
-        $config['menu_slug'],
-        $callback,
-        $config['icon'],
-        $config['position'],
-      );
+    if ($parentSlug !== '') {
+      add_submenu_page($parentSlug, $pageTitle, $menuTitle, $capability, $menuSlug, $callback);
 
-      // If there are submenu items defined, register them
-      if (isset($config['submenu']) && is_array($config['submenu'])) {
-        foreach ($config['submenu'] as $submenu) {
-          // Ensure required submenu fields are present
-          if (!isset($submenu['page_title']) || !isset($submenu['menu_title'])) {
-            continue;
-          }
+      return;
+    }
 
-          $submenu = array_merge([
-            'capability' => $config['capability'],
-            'menu_slug' => '',
-            'callback' => $callback,
-          ], $submenu);
+    add_menu_page($pageTitle, $menuTitle, $capability, $menuSlug, $callback, $icon, $position);
 
-          add_submenu_page(
-            $config['menu_slug'],
-            $submenu['page_title'],
-            $submenu['menu_title'],
-            $submenu['capability'],
-            $submenu['menu_slug'],
-            $submenu['callback'],
-          );
-        }
+    // If there are submenu items defined, register them
+    if (!isset($config['submenu']) || !is_array($config['submenu'])) {
+      return;
+    }
+
+    foreach ($config['submenu'] as $submenu) {
+      if (!is_array($submenu) || !isset($submenu['page_title'], $submenu['menu_title'])) {
+        continue;
       }
+
+      $subPageTitle = Types::getSafeString($submenu['page_title']);
+      $subMenuTitle = Types::getSafeString($submenu['menu_title']);
+      $subCapability = Types::getSafeString($submenu['capability'] ?? $capability);
+      $subMenuSlug = Types::getSafeString($submenu['menu_slug'] ?? '');
+      $subCallback = $submenu['callback'] ?? $callback;
+      $subCallback = is_callable($subCallback) ? $subCallback : $callback;
+
+      add_submenu_page($menuSlug, $subPageTitle, $subMenuTitle, $subCapability, $subMenuSlug, $subCallback);
     }
   }
 
   /**
    * Validates that a controller class has the required 'handle' property.
    *
-   * @param ReflectionClass<Controller> $reflection The reflection class instance
+   * @param ReflectionClass<object> $reflection The reflection class instance
    *
-   * @throws ControllerRegistration<Controller> if the class doesn't meet the requirements
+   * @throws ControllerRegistration if the class doesn't meet the requirements
    */
   private function validateControllerClass(ReflectionClass $reflection): void {
     $className = $reflection->getName();
@@ -844,7 +891,7 @@ PHP;
   /**
    * Determines the type of a controller based on its properties.
    *
-   * @param ReflectionClass<Controller> $reflection The reflection class instance
+   * @param ReflectionClass<object> $reflection The reflection class instance
    *
    * @return string The determined controller type
    */

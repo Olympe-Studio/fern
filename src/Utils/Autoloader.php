@@ -33,6 +33,8 @@ class Autoloader extends Singleton {
   }
 
   public function __construct() {
+    parent::__construct();
+
     $this->includesPath = self::addTrailingSlash(Fern::getRoot()) . 'includes.php';
   }
 
@@ -121,7 +123,7 @@ class Autoloader extends Singleton {
    */
   private static function getFilesRecursively(string $dir, ?callable $filter = null): array {
     // Return cached results if available
-    $cacheKey = $dir . '_' . ($filter ? md5(is_object($filter) ? spl_object_hash($filter) : serialize($filter)) : 'no_filter');
+    $cacheKey = $dir . '_' . ($filter !== null ? md5(is_object($filter) ? spl_object_hash($filter) : serialize($filter)) : 'no_filter');
     if (isset(self::$filePathCache[$cacheKey])) {
       return self::$filePathCache[$cacheKey];
     }
@@ -138,6 +140,7 @@ class Autoloader extends Singleton {
     );
 
     foreach ($iterator as $fileInfo) {
+      /** @var \SplFileInfo $fileInfo */
       // Skip directories, only process files
       if ($fileInfo->isDir()) {
         continue;
@@ -202,7 +205,7 @@ PHP;
     $root = Fern::getRoot();
     $appPath = self::addTrailingSlash($root) . 'App';
 
-    return self::getFilesRecursively($appPath, fn($fileInfo) => $fileInfo->isFile()
+    return self::getFilesRecursively($appPath, fn(\SplFileInfo $fileInfo) => $fileInfo->isFile()
       && $fileInfo->getExtension() === 'php'
       && str_starts_with($fileInfo->getFilename(), '_'));
   }

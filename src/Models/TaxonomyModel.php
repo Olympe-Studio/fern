@@ -24,10 +24,13 @@ abstract class TaxonomyModel {
    * @param array<string, mixed> $args
    */
   public static function query(array $args = []): WP_Term_Query {
-    return new WP_Term_Query([
+    /** @var array{taxonomy: string} $queryArgs */
+    $queryArgs = [
       'taxonomy' => static::getTaxonomy(),
       ...$args,
-    ]);
+    ];
+
+    return new WP_Term_Query($queryArgs);
   }
 
   /**
@@ -74,6 +77,7 @@ abstract class TaxonomyModel {
    * @param array<string, mixed> $args Additional arguments
    */
   public static function create(string $name, array $args = []): mixed {
+    /** @var array{alias_of?: string, description?: string, parent?: int, slug?: string} $args */
     return wp_insert_term($name, static::getTaxonomy(), $args);
   }
 
@@ -83,9 +87,10 @@ abstract class TaxonomyModel {
    * @param int                  $id   Term ID
    * @param array<string, mixed> $args Update arguments
    *
-   * @return WP_Error|array<int<0, max>|string, int|string>
+   * @return WP_Error|array<int|string, mixed>
    */
   public static function update(int $id, array $args): mixed {
+    /** @var array{alias_of?: string, description?: string, parent?: int, slug?: string} $args */
     return wp_update_term($id, static::getTaxonomy(), $args);
   }
 

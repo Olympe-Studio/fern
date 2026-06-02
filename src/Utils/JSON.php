@@ -38,7 +38,7 @@ final class JSON {
       int $depth = self::DEFAULT_DEPTH,
       int $flags = 0,
   ): bool {
-    if (empty($json)) {
+    if ($json === '') {
       return false;
     }
     
@@ -97,8 +97,8 @@ final class JSON {
       int $depth = self::DEFAULT_DEPTH,
       int $flags = 0,
   ): mixed {
-    if (empty($json)) {
-      if ($flags & JSON_THROW_ON_ERROR) {
+    if ($json === '') {
+      if (($flags & JSON_THROW_ON_ERROR) !== 0) {
         throw new InvalidArgumentException('JSON string cannot be empty');
       }
       return null;
@@ -112,7 +112,7 @@ final class JSON {
           $flags | JSON_THROW_ON_ERROR,
       );
     } catch (JsonException $e) {
-      if ($flags & JSON_THROW_ON_ERROR) {
+      if (($flags & JSON_THROW_ON_ERROR) !== 0) {
         throw $e;
       }
 
@@ -136,7 +136,7 @@ final class JSON {
       int $depth = self::DEFAULT_DEPTH,
       int $flags = 0,
   ): array {
-    if (empty($json)) {
+    if ($json === '') {
       throw new JsonException('JSON string cannot be empty');
     }
     

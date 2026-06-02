@@ -16,6 +16,8 @@ class Action {
 
   public function __construct(Request $req) {
     $body = $req->getBody();
+    $body = is_array($body) ? $body : [];
+    /** @var array<string, mixed> $body */
     $this->init($req, $body);
   }
 
@@ -167,7 +169,8 @@ class Action {
    * @param array<string, mixed> $body The request body.
    */
   private function init(Request $req, array $body): void {
-    $this->name = $body['action'] ?? null;
+    $action = $body['action'] ?? null;
+    $this->name = is_string($action) ? $action : null;
     $this->args = $this->parseArgs($req, $body);
   }
 
@@ -181,7 +184,10 @@ class Action {
    */
   private function parseArgs(Request $req, array $body): array {
     if (isset($body['args']) && $req->getContentType() !== 'form-data') {
-      return $body['args'];
+      /** @var array<string, mixed> $args */
+      $args = is_array($body['args']) ? $body['args'] : [];
+
+      return $args;
     }
 
     if ($req->getContentType() === 'form-data') {

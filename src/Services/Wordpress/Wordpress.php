@@ -56,6 +56,10 @@ class Wordpress {
   private static function bootExcerpt(): void {
     $config = Config::get('core.excerpt');
 
+    if (!is_array($config)) {
+      return;
+    }
+
     if (isset($config['length'])) {
       Filters::on('excerpt_length', fn() => $config['length']);
     }
@@ -71,19 +75,21 @@ class Wordpress {
   private static function bootUploadMimes(): void {
     $config = Config::get('core.upload_mimes');
 
-    if (!empty($config)) {
-      Filters::on('upload_mimes', function (array $mimes) use ($config) {
-        foreach ($config as $extension => $mime_type) {
-          if ($mime_type === false) {
-            unset($mimes[$extension]);
-          } else {
-            $mimes[$extension] = $mime_type;
-          }
-        }
-
-        return $mimes;
-      });
+    if (!is_array($config) || $config === []) {
+      return;
     }
+
+    Filters::on('upload_mimes', function (array $mimes) use ($config) {
+      foreach ($config as $extension => $mime_type) {
+        if ($mime_type === false) {
+          unset($mimes[$extension]);
+        } else {
+          $mimes[$extension] = $mime_type;
+        }
+      }
+
+      return $mimes;
+    });
   }
 
   /**
@@ -92,18 +98,20 @@ class Wordpress {
   private static function bootDashboardWidgets(): void {
     $config = Config::get('core.dashboard_widgets');
 
-    if (isset($config['disable']) && !empty($config['disable'])) {
-      Events::on('wp_dashboard_setup', function () use ($config): void {
+    if (is_array($config) && isset($config['disable']) && is_array($config['disable']) && $config['disable'] !== []) {
+      $disable = $config['disable'];
+
+      Events::on('wp_dashboard_setup', function () use ($disable): void {
         /**
          * If disabled is not a boolean it means we want to force the context.
          */
-        foreach ($config['disable'] as $widget => $isDisabled) {
+        foreach ($disable as $widget => $isDisabled) {
           if (is_bool($isDisabled) && $isDisabled === false) {
             continue;
           }
 
           $context = $isDisabled === true ? 'normal' : $isDisabled;
-          self::removeDashboardWidget($widget, $context);
+          self::removeDashboardWidget((string) $widget, Types::getSafeString($context));
         }
       }, 10, 0);
     }
@@ -122,9 +130,11 @@ class Wordpress {
   private static function bootAdminMenuRemovals(): void {
     $config = Config::get('core.admin_menu');
 
-    if (isset($config['disable']) && is_array($config['disable'])) {
-      Events::on('admin_init', function () use ($config): void {
-        foreach ($config['disable'] as $item => $shouldRemove) {
+    if (is_array($config) && isset($config['disable']) && is_array($config['disable'])) {
+      $disable = $config['disable'];
+
+      Events::on('admin_init', function () use ($disable): void {
+        foreach ($disable as $item => $shouldRemove) {
           if ($shouldRemove === true) {
             switch ($item) {
               case 'tags':
@@ -164,11 +174,13 @@ class Wordpress {
   private static function bootAdminToolbarRemovals(): void {
     $config = Config::get('core.admin_toolbar');
 
-    if (isset($config['disable']) && is_array($config['disable'])) {
-      Events::on('admin_bar_menu', function (WP_Admin_Bar $menu) use ($config): void {
-        foreach ($config['disable'] as $item => $shouldRemove) {
+    if (is_array($config) && isset($config['disable']) && is_array($config['disable'])) {
+      $disable = $config['disable'];
+
+      Events::on('admin_bar_menu', function (WP_Admin_Bar $menu) use ($disable): void {
+        foreach ($disable as $item => $shouldRemove) {
           if ($shouldRemove === true) {
-            $menu->remove_node($item);
+            $menu->remove_node((string) $item);
           }
         }
       }, 999);

@@ -2,7 +2,7 @@
   "name": "fern/core",
   "description": "Yet another wordpress framework",
   "type": "library",
-  "version": "1.7.1",
+  "version": "2.0.0",
   "license": "MIT",
   "autoload": {
     "psr-4": {
@@ -33,7 +33,8 @@
     "phpstan/phpstan": "2.1.x-dev",
     "szepeviktor/phpstan-wordpress": "2.x-dev",
     "phpstan/extension-installer": "1.4.x-dev",
-    "php-stubs/woocommerce-stubs": "dev-master"
+    "php-stubs/woocommerce-stubs": "dev-master",
+    "phpstan/phpstan-strict-rules": "2.0.11"
   },
   "config": {
     "allow-plugins": {

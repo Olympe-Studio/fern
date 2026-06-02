@@ -68,12 +68,12 @@ class FernControllerCommand {
 
     $templateContent = file_get_contents($templatePath);
 
-    if (!$templateContent) {
+    if ($templateContent === false || $templateContent === '') {
       WP_CLI::error('Failed to read template file.');
       exit;
     }
 
-    $namespace = 'App\\Controllers' . (empty($subdir) ? '' : '\\' . $subdir);
+    $namespace = 'App\\Controllers' . ($subdir === '' ? '' : '\\' . $subdir);
     $templateContent = str_replace('namespace App\Controllers\Subdir;', "namespace {$namespace};", $templateContent);
     $controllerContent = str_replace('NameController', ucfirst($name) . 'Controller', $templateContent);
     $controllerContent = str_replace('NameView', ucfirst($name), $controllerContent);
@@ -82,7 +82,7 @@ class FernControllerCommand {
     // Determine the output directory based on the type
     $outputDir = trailingslashit(Fern::getRoot()) . 'App/Controllers/';
 
-    if (!empty($subdir)) {
+    if ($subdir !== '') {
       $outputDir .= trailingslashit($subdir);
     }
 
@@ -143,8 +143,7 @@ class FernControllerCommand {
         'post_status' => 'publish',
       ];
 
-      /** @var int|WP_Error $pageId */
-      $pageId = wp_insert_post($pageArgs);
+      $pageId = wp_insert_post($pageArgs, true);
 
       if ($pageId instanceof WP_Error) {
         WP_CLI::error('Failed to create the page: ' . $pageId->get_error_message());

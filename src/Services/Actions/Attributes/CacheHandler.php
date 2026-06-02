@@ -9,6 +9,7 @@ use Fern\Core\Services\Controller\AttributesHandler;
 use Fern\Core\Services\HTTP\Reply;
 use Fern\Core\Services\HTTP\Request;
 use Fern\Core\Utils\Cache;
+use Fern\Core\Utils\Types;
 use ReflectionAttribute;
 use Throwable;
 
@@ -24,10 +25,10 @@ class CacheHandler implements AttributesHandler {
   /**
    * Handle the Cache attribute
    *
-   * @param ReflectionAttribute<CacheReply> $attribute  The attribute instance
-   * @param object                          $controller The controller instance
-   * @param string                          $methodName The method name
-   * @param Request                         $request    The current request
+   * @param ReflectionAttribute<object> $attribute  The attribute instance
+   * @param object                      $controller The controller instance
+   * @param string                      $methodName The method name
+   * @param Request                     $request    The current request
    *
    * @return bool|string Returns true if the attribute is valid, or an error message
    */
@@ -39,6 +40,10 @@ class CacheHandler implements AttributesHandler {
   ): bool|string {
     $reflection = $attribute->newInstance();
 
+    if (!$reflection instanceof CacheReply) {
+      return true;
+    }
+
     $ttl = $reflection->ttl;
     $key = $reflection->key;
     $varyBy = $reflection->varyBy;
@@ -47,24 +52,31 @@ class CacheHandler implements AttributesHandler {
     $cachedResponse = Cache::get($cacheKey);
 
     // Hijack the reply
-    if ($cachedResponse && !Fern::isDev()) {
+    if (is_array($cachedResponse) && !Fern::isDev()) {
+      /** @var array<string, mixed> $cachedResponse */
       try {
         $reply = Reply::fromArray($cachedResponse);
         $reply->send();
       } catch (Throwable $e) {
         // If the cached response is not a valid reply, execute the action
-        $reply = $controller->{$methodName}($request);
-        Cache::set($cacheKey, $reply->toArray(), true, $ttl);
-        $reply->send();
+        $reply = (new \ReflectionMethod($controller, $methodName))->invoke($controller, $request);
+
+        if ($reply instanceof Reply) {
+          Cache::set($cacheKey, $reply->toArray(), true, $ttl);
+          $reply->send();
+        }
       }
 
       return true;
     }
 
     // Execute the action
-    $reply = $controller->{$methodName}($request);
-    Cache::set($cacheKey, $reply->toArray(), true, $ttl);
-    $reply->send();
+    $reply = (new \ReflectionMethod($controller, $methodName))->invoke($controller, $request);
+
+    if ($reply instanceof Reply) {
+      Cache::set($cacheKey, $reply->toArray(), true, $ttl);
+      $reply->send();
+    }
 
     return true;
   }
@@ -87,7 +99,7 @@ class CacheHandler implements AttributesHandler {
     $cacheKey = self::CACHE_PREFIX . $key;
 
     foreach ($varyBy as $param) {
-      $cacheKey .= ':' . $action->get($param);
+      $cacheKey .= ':' . Types::getSafeString($action->get($param));
     }
 
     return $cacheKey;

@@ -8,6 +8,7 @@ use Fern\Core\Config;
 use Fern\Core\Errors\FernMailerException;
 use Fern\Core\Factory\Singleton;
 use Fern\Core\Fern;
+use Fern\Core\Utils\Types;
 use Fern\Core\Wordpress\Events;
 use Fern\Core\Wordpress\Filters;
 use PHPMailer\PHPMailer\PHPMailer;
@@ -20,7 +21,12 @@ class Mailer extends Singleton {
   private array $config;
 
   public function __construct() {
-    $this->config = Config::get('mailer');
+    parent::__construct();
+
+    $config = Config::get('mailer');
+    $config = is_array($config) ? $config : [];
+    /** @var array<string, mixed> $config */
+    $this->config = $config;
   }
 
   /**
@@ -41,12 +47,14 @@ class Mailer extends Singleton {
     $requiredKeys = ['from_name', 'from_address', 'host', 'port', 'username', 'password'];
 
     foreach ($requiredKeys as $key) {
-      if (!isset($this->config[$key]) || empty($this->config[$key])) {
+      $value = $this->config[$key] ?? null;
+
+      if ($value === null || $value === '' || $value === 0) {
         throw new FernMailerException("Mailer configuration is invalid: missing or empty '{$key}'");
       }
     }
 
-    if (!filter_var($this->config['from_address'], FILTER_VALIDATE_EMAIL)) {
+    if (filter_var($this->config['from_address'], FILTER_VALIDATE_EMAIL) === false) {
       throw new FernMailerException("Mailer configuration is invalid: 'from_address' is not a valid email");
     }
 
@@ -66,8 +74,7 @@ class Mailer extends Singleton {
     $instance = self::getInstance();
     $config = $instance->getConfig();
 
-    /** @phpstan-ignore-next-line */
-    if ($config === null || !is_array($config)) {
+    if ($config === []) {
       // Means the user don't want to configure mailer with Fern.
       return;
     }
@@ -77,14 +84,14 @@ class Mailer extends Singleton {
     Events::on('phpmailer_init', function (PHPMailer $mailer) use ($config) {
       $mailer->isSMTP();
       $mailer->SMTPAutoTLS = false;
-      $mailer->SMTPAuth = !empty($config['username']) && !empty($config['password']);
+      $mailer->SMTPAuth = Types::getSafeString($config['username'] ?? '') !== '' && Types::getSafeString($config['password'] ?? '') !== '';
       $mailer->SMTPDebug = Fern::isDev() ? SMTP::DEBUG_SERVER : SMTP::DEBUG_OFF;
-      $mailer->SMTPSecure = $config['encryption'];
+      $mailer->SMTPSecure = Types::getSafeString($config['encryption'] ?? '');
       $mailer->Debugoutput = 'error_log';
-      $mailer->Host = $config['host'];
-      $mailer->Port = $config['port'];
-      $mailer->Username = $config['username'];
-      $mailer->Password = $config['password'];
+      $mailer->Host = Types::getSafeString($config['host'] ?? '');
+      $mailer->Port = Types::getSafeInt($config['port'] ?? 0);
+      $mailer->Username = Types::getSafeString($config['username'] ?? '');
+      $mailer->Password = Types::getSafeString($config['password'] ?? '');
 
       return $mailer;
     });

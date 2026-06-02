@@ -17,7 +17,7 @@ class Utils {
       return null;
     }
 
-    if (empty($price) || $price <= 0) {
+    if ($price === '' || $price <= 0) {
       return null;
     }
 

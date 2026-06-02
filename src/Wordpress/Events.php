@@ -52,7 +52,7 @@ class Events extends Hooks {
     self::trigger($name, ...$args);
     $result = ob_get_clean();
 
-    return $result ? $result : '';
+    return $result === false ? '' : $result;
   }
 
   /**

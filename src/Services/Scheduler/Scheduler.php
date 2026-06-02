@@ -53,6 +53,7 @@ class Scheduler extends Singleton {
      * Add the schedule to the cron schedules.
      */
     Filters::on('cron_schedules', function ($schedules) use ($str, $schedule) {
+      $schedules = is_array($schedules) ? $schedules : [];
       $schedules[$str] = $schedule;
 
       return $schedules;
@@ -78,11 +79,11 @@ class Scheduler extends Singleton {
       $startAt = time();
     }
 
-    if (empty($taskName)) {
+    if ($taskName === '') {
       throw new InvalidArgumentException('Task name cannot be empty');
     }
 
-    if (!wp_next_scheduled($taskName)) {
+    if (wp_next_scheduled($taskName) === false) {
       wp_schedule_event($startAt, $interval, $taskName, $args);
     }
 
@@ -113,7 +114,7 @@ class Scheduler extends Singleton {
    * @return bool True if the task was unscheduled, false if it wasn't scheduled
    */
   public static function unschedule(string $taskName, int $when = -1): bool {
-    if (empty($taskName)) {
+    if ($taskName === '') {
       throw new InvalidArgumentException('Task name must be a non-empty string');
     }
 
@@ -122,7 +123,7 @@ class Scheduler extends Singleton {
     if ($when === -1) {
       $when = wp_next_scheduled($taskName);
 
-      if (!$when) {
+      if ($when === false) {
         return false;
       }
     }
@@ -147,7 +148,7 @@ class Scheduler extends Singleton {
    * @throws SchedulerParsingError
    */
   private static function parseScheduleString(string $str): array {
-    if (!preg_match('/^every_(\d+)_(seconds|minutes|hours|days)$/', $str, $matches)) {
+    if (preg_match('/^every_(\d+)_(seconds|minutes|hours|days)$/', $str, $matches) !== 1) {
       throw new SchedulerParsingError('Invalid schedule string. Received: ' . $str . ' but expected pattern "every_{number}_{(seconds|minutes|hours|days)}" with a number greater than 1 and a valid unit.');
     }
 

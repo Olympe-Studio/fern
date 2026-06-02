@@ -14,7 +14,9 @@ class Yoast implements SEOIntegration {
       do_action('wpseo_head');
       remove_all_actions('wpseo_head');
 
-      return ob_get_clean() ?: '';
+      $head = ob_get_clean();
+
+      return $head === false ? '' : $head;
     }
 
     return '';

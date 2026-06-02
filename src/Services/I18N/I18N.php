@@ -4,35 +4,57 @@ namespace Fern\Core\Services\I18N;
 
 use Fern\Core\Config;
 use Fern\Core\Fern;
-use RuntimeException;
+use Fern\Core\Utils\Types;
+use Fern\Core\Wordpress\Events;
 
 class I18N {
   private const DEFAULT_DOMAIN = 'fern';
 
   private const DEFAULT_LANGUAGES_PATH = '/languages';
 
+  private static bool $hasLoadedTextDomain = false;
+
+  private static string $storedLanguagesPath = '';
+
+  private static string $storedDomain = '';
+
   /**
    * Boot the i18n configuration
-   *
-   * @throws RuntimeException If languages directory is not readable
    */
   public static function boot(): void {
     $config = Config::get('i18n', []);
 
-    /** @phpstan-ignore-next-line */ // Better be cautious
-    if (empty($config) || $config === null) {
+    if (!is_array($config) || $config === []) {
       return;
     }
 
-    $path = $config['languages_folder_path']
-      ?? untrailingslashit(Fern::getRoot()) . self::DEFAULT_LANGUAGES_PATH;
-    $domain = $config['domain'] ?? self::DEFAULT_DOMAIN;
+    $path = isset($config['languages_folder_path'])
+      ? Types::getSafeString($config['languages_folder_path'])
+      : untrailingslashit(Fern::getRoot()) . self::DEFAULT_LANGUAGES_PATH;
+    $domain = isset($config['domain']) ? Types::getSafeString($config['domain']) : self::DEFAULT_DOMAIN;
+    $path = rtrim($path, '/\\');
 
     if (!is_dir($path) || !is_readable($path)) {
       wp_mkdir_p($path);
     }
 
-    self::loadTextDomain($path, $domain);
+    self::$storedLanguagesPath = $path;
+    self::$storedDomain = $domain;
+
+    Events::on('pll_language_defined', [self::class, 'loadTextDomainLate'], 0);
+    Events::on('wp', [self::class, 'loadTextDomainLate'], 20);
+  }
+
+  /**
+   * Loads the text domain after Polylang (or core) has resolved the locale.
+   */
+  public static function loadTextDomainLate(): void {
+    if (self::$hasLoadedTextDomain || self::$storedLanguagesPath === '' || self::$storedDomain === '') {
+      return;
+    }
+
+    self::loadTextDomain(self::$storedLanguagesPath, self::$storedDomain);
+    self::$hasLoadedTextDomain = true;
   }
 
   /**
@@ -45,23 +67,20 @@ class I18N {
     $locale = determine_locale();
     $path = rtrim($path, '/\\');
 
-    if (empty($locale)) {
+    if ($locale === '') {
       return;
     }
 
-    // Try loading exact locale match first - e.g. en_US
     if (self::tryLoadMoFile($path, $domain, $locale)) {
       return;
     }
 
-    // Try base locale if exact match fails - e.g. en_US becomes en
     $baseLocale = explode('_', $locale)[0];
 
-    if ($baseLocale && self::tryLoadMoFile($path, $domain, $baseLocale)) {
+    if ($baseLocale !== '' && self::tryLoadMoFile($path, $domain, $baseLocale)) {
       return;
     }
 
-    // Try wildcard match as last resort - e.g. en_US becomes en_*
     self::tryLoadWildcardMoFile($path, $domain, $baseLocale);
   }
 
@@ -87,7 +106,7 @@ class I18N {
     $pattern = "{$path}/{$domain}-{$locale}_*.mo";
     $files = glob($pattern);
 
-    if (!empty($files)) {
+    if ($files !== false && $files !== []) {
       load_textdomain($domain, $files[0]);
     }
   }

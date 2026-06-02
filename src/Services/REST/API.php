@@ -112,8 +112,8 @@ class API extends Singleton {
    * @return void
    */
   public function registerRoutes(): void {
-    $namespace = trim((string) ($this->config['namespace'] ?? 'fern'), '/');
-    $version = (string) ($this->config['version'] ?? '1');
+    $namespace = trim($this->config['namespace'] ?? 'fern', '/');
+    $version = $this->config['version'] ?? '1';
     $base = sprintf('%s/v%s', $namespace, $version);
 
     foreach ($this->routes as $route) {
@@ -158,11 +158,9 @@ class API extends Singleton {
     ];
 
     if ($permission !== null) {
-      /** @var callable(WP_REST_Request<array<string,mixed>>): bool $permission */
       $route['permission'] = $permission;
     }
 
-    /** @var Route $route */
     $instance->routes[$key] = $route;
 
     return $instance;

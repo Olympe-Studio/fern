@@ -24,7 +24,7 @@ class Types {
     }
 
     if (is_array($value)) {
-      return empty($value) ? null : $value;
+      return $value === [] ? null : $value;
     }
 
     if (
@@ -42,22 +42,50 @@ class Types {
   /**
    * Safe float conversion
    */
-  public static function getSafeFloat(float|int|string|null $value): float {
-    return (float) ($value ?? 0);
+  public static function getSafeFloat(mixed $value): float {
+    if (is_float($value)) {
+      return $value;
+    }
+
+    if (is_int($value) || is_string($value) || is_bool($value) || $value === null) {
+      return (float) ($value ?? 0);
+    }
+
+    return 0.0;
   }
 
   /**
    * Safe integer conversion
    */
-  public static function getSafeInt(float|int|string|null $value): int {
-    return (int) ($value ?? 0);
+  public static function getSafeInt(mixed $value): int {
+    if (is_int($value)) {
+      return $value;
+    }
+
+    if (is_float($value) || is_string($value) || is_bool($value) || $value === null) {
+      return (int) ($value ?? 0);
+    }
+
+    return 0;
   }
 
   /**
    * Safe string conversion
    */
   public static function getSafeString(mixed $value): string {
-    return (string) ($value ?? '');
+    if (is_string($value)) {
+      return $value;
+    }
+
+    if (is_scalar($value) || $value === null) {
+      return (string) ($value ?? '');
+    }
+
+    if (is_object($value) && method_exists($value, '__toString')) {
+      return (string) $value;
+    }
+
+    return '';
   }
 
   /**
@@ -72,13 +100,9 @@ class Types {
   }
 
   /**
-   * Safe array conversion
+   * Safe array conversion. Wraps a non-array, non-null value into a single-element array.
    *
-   * @template T
-   *
-   * @param T|array<T>|null $value
-   *
-   * @return array<int, T>
+   * @return array<int|string, mixed>
    */
   public static function getSafeArray(mixed $value): array {
     if ($value === null) {

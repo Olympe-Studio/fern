@@ -4,6 +4,7 @@ namespace Fern\Core\Services\HTTP;
 
 use Fern\Core\Errors\FileHandlingError;
 use Fern\Core\Fern;
+use Fern\Core\Utils\Types;
 use Fern\Core\Wordpress\Filters;
 use Fern\Services\HTTP\FileConstants;
 use InvalidArgumentException;
@@ -65,7 +66,7 @@ class File {
    * @return array<int, self>
    */
   public static function getAllFromCurrentRequest(): array {
-    if (empty($_FILES)) {
+    if ($_FILES === []) {
       return [];
     }
 
@@ -73,6 +74,11 @@ class File {
     $index = 0;
 
     foreach ($_FILES as $key => $data) {
+      if (!is_array($data)) {
+        continue;
+      }
+      /** @var array<string, mixed> $data */
+
       if (is_array($data['name'])) {
         // Flatten the array of files from handleMultipleFiles
         $multipleFiles = self::handleMultipleFiles($key, $data);
@@ -85,12 +91,12 @@ class File {
 
       $files[$index++] = new self(
           $key,
-          $data['name'],
-          $data['full_path'],
-          $data['type'],
-          $data['tmp_name'],
-          $data['error'],
-          $data['size'],
+          Types::getSafeString($data['name']),
+          Types::getSafeString($data['full_path'] ?? ''),
+          Types::getSafeString($data['type'] ?? ''),
+          Types::getSafeString($data['tmp_name'] ?? ''),
+          Types::getSafeInt($data['error'] ?? 0),
+          Types::getSafeInt($data['size'] ?? 0),
       );
     }
 
@@ -102,7 +108,7 @@ class File {
    *
    * @return array<string> The list of disallowed file extensions.
    */
-  public static function getNotAllowedFileExtensions() {
+  public static function getNotAllowedFileExtensions(): array {
     /**
      * Filter the list of disallowed file extensions.
      *
@@ -110,7 +116,10 @@ class File {
      *
      * @return array<string>
      */
-    return Filters::apply('fern:core:file:disallowed_upload_extensions', FileConstants::DISALLOWED_FILE_EXTENSIONS);
+    $extensions = Filters::apply('fern:core:file:disallowed_upload_extensions', FileConstants::DISALLOWED_FILE_EXTENSIONS);
+    $extensions = is_array($extensions) ? $extensions : [];
+    /** @var array<string> $extensions */
+    return $extensions;
   }
 
   /**
@@ -262,9 +271,13 @@ class File {
 
     if ($path !== null) {
       $uploadDirFilter = function ($uploads) use ($path) {
+        if (!is_array($uploads)) {
+          return $uploads;
+        }
+
         $path = trim($path, '/');
-        $uploads['path'] = $uploads['basedir'] . '/' . $path;
-        $uploads['url'] = $uploads['baseurl'] . '/' . $path;
+        $uploads['path'] = Types::getSafeString($uploads['basedir'] ?? '') . '/' . $path;
+        $uploads['url'] = Types::getSafeString($uploads['baseurl'] ?? '') . '/' . $path;
         $uploads['subdir'] = '/' . $path;
 
         return $uploads;
@@ -281,12 +294,12 @@ class File {
         'unique_filename_callback' => [$this, 'makeFilenameUnique'],
       ]);
 
-      if ($upload && isset($upload['error'])) {
-        throw new FileHandlingError('File upload failed : ' . $upload['error']);
+      if (isset($upload['error'])) {
+        throw new FileHandlingError('File upload failed : ' . Types::getSafeString($upload['error']));
       }
 
-      $this->setFullPath($upload['file']);
-      $this->setUrl($upload['url']);
+      $this->setFullPath(Types::getSafeString($upload['file'] ?? ''));
+      $this->setUrl(Types::getSafeString($upload['url'] ?? ''));
     } finally {
       if ($path !== null) {
         remove_filter('upload_dir', $uploadDirFilter);
@@ -310,11 +323,13 @@ class File {
    * @throws FileHandlingError
    */
   public function validateUploadDir(array $uploads): array {
-    if (!wp_mkdir_p($uploads['path'])) {
+    $uploadPath = Types::getSafeString($uploads['path'] ?? '');
+
+    if (!wp_mkdir_p($uploadPath)) {
       throw new FileHandlingError('Failed to create upload directory');
     }
 
-    if (!wp_is_writable($uploads['path'])) {
+    if (!wp_is_writable($uploadPath)) {
       throw new FileHandlingError('Upload directory is not writable');
     }
 
@@ -361,25 +376,33 @@ class File {
   private static function handleMultipleFiles(string $key, array $data): array {
     $files = [];
     $errors = [];
-    $fileCount = count($data['name']);
+
+    $names = is_array($data['name'] ?? null) ? $data['name'] : [];
+    $fullPaths = is_array($data['full_path'] ?? null) ? $data['full_path'] : [];
+    $types = is_array($data['type'] ?? null) ? $data['type'] : [];
+    $tmpNames = is_array($data['tmp_name'] ?? null) ? $data['tmp_name'] : [];
+    $errorCodes = is_array($data['error'] ?? null) ? $data['error'] : [];
+    $sizes = is_array($data['size'] ?? null) ? $data['size'] : [];
+
+    $fileCount = count($names);
 
     for ($i = 0; $i < $fileCount; $i++) {
       try {
         $files[] = new self(
             $key . '_' . $i,
-            $data['name'][$i],
-            $data['full_path'][$i],
-            $data['type'][$i],
-            $data['tmp_name'][$i],
-            $data['error'][$i],
-            $data['size'][$i],
+            Types::getSafeString($names[$i] ?? ''),
+            Types::getSafeString($fullPaths[$i] ?? ''),
+            Types::getSafeString($types[$i] ?? ''),
+            Types::getSafeString($tmpNames[$i] ?? ''),
+            Types::getSafeInt($errorCodes[$i] ?? 0),
+            Types::getSafeInt($sizes[$i] ?? 0),
         );
       } catch (InvalidArgumentException $e) {
-        $errors[] = "File {$data['name'][$i]}: {$e->getMessage()}";
+        $errors[] = 'File ' . Types::getSafeString($names[$i] ?? '') . ': ' . $e->getMessage();
       }
     }
 
-    if (!empty($errors)) {
+    if ($errors !== []) {
       throw new FileHandlingError(
           "Failed to process multiple files:\n" . implode("\n", $errors),
       );
@@ -396,7 +419,7 @@ class File {
   private function validateMimeType(): bool {
     $finfo = finfo_open(FILEINFO_MIME_TYPE);
 
-    if (!$finfo) {
+    if ($finfo === false) {
       throw new FileHandlingError('Failed to initialize fileinfo');
     }
 
@@ -410,6 +433,7 @@ class File {
        * @return array<string>
        */
       $allowedMimeTypes = Filters::apply('fern:core:file:allowed_mime_types', FileConstants::ALLOWED_MIME_TYPES);
+      $allowedMimeTypes = is_array($allowedMimeTypes) ? $allowedMimeTypes : [];
 
       return in_array($actualMime, $allowedMimeTypes, true);
     } finally {

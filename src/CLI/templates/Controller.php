@@ -8,6 +8,7 @@ use Fern\Core\Services\Controller\Controller;
 use Fern\Core\Services\HTTP\Reply;
 use Fern\Core\Services\HTTP\Request;
 use Fern\Core\Services\Views\Views;
+use Fern\Core\Utils\Types;
 
 class NameController extends Singleton implements Controller {
   public static string $handle = 'id_or_post_type_or_taxonomy';
@@ -30,7 +31,7 @@ class NameController extends Singleton implements Controller {
    */
   public function sayHelloWorld(Request $request): Reply {
     $action = $request->getAction();
-    $greeting = $action->get('greeting');
+    $greeting = Types::getSafeString($action->get('greeting'));
 
     return new Reply(200, "Hello, {$greeting}!");
   }

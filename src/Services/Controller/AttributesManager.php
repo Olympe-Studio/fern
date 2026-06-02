@@ -36,8 +36,13 @@ class AttributesManager extends Singleton {
       CacheReply::class => [new CacheHandler(), 'handle'],
       Nonce::class => [new NonceHandler(), 'handle'],
     ]);
+    $handlers = is_array($handlers) ? $handlers : [];
 
     foreach ($handlers as $attributeClass => $handler) {
+      if (!is_string($attributeClass) || !is_callable($handler)) {
+        continue;
+      }
+
       $manager->register($attributeClass, $handler);
     }
   }
@@ -49,7 +54,7 @@ class AttributesManager extends Singleton {
    * @param callable $handler        The handler function
    */
   public function register(string $attributeClass, callable $handler): void {
-    if (is_array($handler) && count($handler) === 2) {
+    if (is_array($handler)) {
       if (!($handler[0] instanceof AttributesHandler)) {
         throw new InvalidArgumentException('Invalid handler provided for attribute. Handler must implement \Fern\Core\Services\Controller\AttributesHandler interface.');
       }
@@ -82,7 +87,7 @@ class AttributesManager extends Singleton {
         }
       }
 
-      if (!empty($errors)) {
+      if ($errors !== []) {
         throw new AttributeValidationException(
             sprintf(
                 'Validation failed for method %s::%s - %s',
@@ -125,12 +130,16 @@ class AttributesManager extends Singleton {
     $attributeClass = $attribute->getName();
 
     if (isset($this->handlers[$attributeClass])) {
-      return ($this->handlers[$attributeClass])(
+      $result = ($this->handlers[$attributeClass])(
           $attribute,
           $controller,
           $methodName,
           $request
       );
+
+      if (is_bool($result) || is_string($result)) {
+        return $result;
+      }
     }
 
     return true;

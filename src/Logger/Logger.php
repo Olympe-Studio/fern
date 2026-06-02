@@ -40,6 +40,8 @@ class Logger extends Singleton {
    * @throws RuntimeException If unable tocreate log directory
    */
   public function __construct(string $logFileName = self::DEFAULT_LOG_FILE) {
+    parent::__construct();
+
     $this->setLogFileName($logFileName);
   }
 
@@ -49,7 +51,7 @@ class Logger extends Singleton {
    * @param string $logFileName The name of the log file.
    */
   private function setLogFileName(string $logFileName = self::DEFAULT_LOG_FILE): void {
-    $logFileName = empty($logFileName) ? self::DEFAULT_LOG_FILE : $logFileName;
+    $logFileName = $logFileName === '' ? self::DEFAULT_LOG_FILE : $logFileName;
 
     $this->logFileName = $logFileName;
     $this->logFilePath = self::getLogFolder() . '/' . $this->logFileName;
@@ -61,12 +63,12 @@ class Logger extends Singleton {
    * @throws RuntimeException If unable to create log directory
    */
   public static function getLogFolder(): string {
-    /** @var bool|string */
     $wpDebugLog = defined('WP_DEBUG_LOG') ? constant('WP_DEBUG_LOG') : false;
 
-    $path = is_bool($wpDebugLog)
-      ? Fern::getRoot() . '/logs'
-      : (string) $wpDebugLog;
+    // WP_DEBUG_LOG can be a string path at runtime; the WordPress stubs model it as bool only.
+    $path = is_string($wpDebugLog)
+      ? $wpDebugLog
+      : Fern::getRoot() . '/logs';
 
     $path = str_ends_with($path, 'debug.log')
       ? dirname($path)
@@ -135,7 +137,7 @@ class Logger extends Singleton {
    * @return string
    */
   private static function formatContext(mixed ...$context): string {
-    if (empty($context)) {
+    if ($context === []) {
       return '';
     }
 
@@ -163,7 +165,7 @@ class Logger extends Singleton {
    * @param mixed  ...$context Additional context data
    */
   private static function log(string $level, string $message, mixed ...$context): void {
-    if (empty($message)) {
+    if ($message === '') {
       return;
     }
 

@@ -28,7 +28,7 @@ class Helmet extends Singleton {
   public static function getCurrent() {
     $plugin = self::resolvePlugin();
 
-    if (!$plugin) {
+    if ($plugin === false || $plugin === '') {
       return null;
     }
 

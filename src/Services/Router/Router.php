@@ -18,6 +18,7 @@ use Fern\Core\Services\Controller\Controller;
 use Fern\Core\Services\Controller\ControllerResolver;
 use Fern\Core\Services\HTTP\Reply;
 use Fern\Core\Services\HTTP\Request;
+use Fern\Core\Utils\Types;
 use Fern\Core\Wordpress\Filters;
 use ReflectionMethod;
 use Throwable;
@@ -67,8 +68,13 @@ class Router extends Singleton {
   private array $controllerCache = [];
 
   public function __construct() {
+    parent::__construct();
+
     $this->request = Request::getInstance();
-    $this->config = Config::get('core.routes');
+    $config = Config::get('core.routes');
+    $config = is_array($config) ? $config : [];
+    /** @var RouterConfig $config */
+    $this->config = $config;
     $this->controllerResolver = ControllerResolver::getInstance();
     $this->attributeManagerr = AttributesManager::getInstance();
     $this->didPass = false;
@@ -174,7 +180,10 @@ class Router extends Singleton {
       return;
     }
 
-    $reply = $controller::getInstance()->handle($this->request);
+    $instance = $controller::getInstance();
+    $reply = is_object($instance) && method_exists($instance, 'handle')
+      ? $instance->handle($this->request)
+      : null;
 
     if ($reply instanceof Reply) {
       $reply->code(404);
@@ -196,7 +205,7 @@ class Router extends Singleton {
 
     // For admin requests, add the page to the cache key
     if ($viewType === 'admin') {
-      $cacheKey .= '_' . $this->request->getUrlParam('page');
+      $cacheKey .= '_' . Types::getSafeString($this->request->getUrlParam('page'));
     } else {
       $id = $this->request->getCurrentId();
       $type = $this->request->isTerm() ? $this->request->getTaxonomy() : $this->request->getPostType();
@@ -241,11 +250,11 @@ class Router extends Singleton {
        *
        * @return int|null The resolved ID. When returning null, we will resolve the controller using its taxonomy or post_type instead.
        */
-      $id = Filters::apply('fern:core:router:resolve_id', (int) $id, $this->request);
+      $id = Filters::apply('fern:core:router:resolve_id', $id, $this->request);
 
       if (!is_numeric($id) || $id < 0) {
         if (!is_null($id)) {
-          throw new RouterException("Invalid ID: {$id}. Must be an integer greater than or equal to 0 or null.");
+          throw new RouterException('Invalid ID: ' . Types::getSafeString($id) . '. Must be an integer greater than or equal to 0 or null.');
         }
       }
 
@@ -354,10 +363,10 @@ class Router extends Singleton {
     }
 
     if (\is_home()) {
-      $id = (int) \get_option('page_for_posts');
+      $id = Types::getSafeInt(\get_option('page_for_posts'));
     }
 
-    return Filters::apply('fern:core:router:get_archive_page_id', $id, $type);
+    return Types::getSafeInt(Filters::apply('fern:core:router:get_archive_page_id', $id, $type));
   }
 
   /**
@@ -398,7 +407,7 @@ class Router extends Singleton {
       return null;
     }
 
-    return $this->controllerResolver->resolve('admin', (string) $page);
+    return $this->controllerResolver->resolve('admin', Types::getSafeString($page));
   }
 
   /**
@@ -422,7 +431,7 @@ class Router extends Singleton {
     try {
       $name = $action->getName();
 
-      if ($name === '' || !$name) {
+      if ($name === null || $name === '') {
         throw new ActionNotFoundException('Action name is required.');
       }
 
@@ -443,14 +452,17 @@ class Router extends Singleton {
         throw new ActionException("Action {$name} must be a public and non-static method.");
       }
 
-      $canRun = Filters::apply('fern:core:action:can_run', true, $action, $controller);
+      $canRun = Types::getSafeBool(Filters::apply('fern:core:action:can_run', true, $action, $controller));
 
       if (!$canRun) {
         throw new ActionNotFoundException("Action {$name} not found.");
       }
 
-      $reply = $controller->{$name}($this->request, $action);
-      $reply->send();
+      $reply = $reflection->invoke($controller, $this->request, $action);
+
+      if ($reply instanceof Reply) {
+        $reply->send();
+      }
     } catch (Throwable $e) {
       $errorId = $this->createErrorId('router_action');
       Logger::error('Router action execution failed', [
@@ -520,7 +532,10 @@ class Router extends Singleton {
    * @param string $controller The controller to handle the request
    */
   private function handleGetRequest(string $controller): void {
-    $reply = $controller::getInstance()->handle($this->request);
+    $instance = $controller::getInstance();
+    $reply = is_object($instance) && method_exists($instance, 'handle')
+      ? $instance->handle($this->request)
+      : null;
 
     if ($reply instanceof Reply) {
       $reply->send();

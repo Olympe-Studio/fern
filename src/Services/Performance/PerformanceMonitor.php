@@ -16,7 +16,7 @@ class PerformanceMonitor {
   /** @var bool Whether performance monitoring is enabled */
   private static bool $enabled = false;
 
-  /** @var array<string, float> Active timers with their start times */
+  /** @var array<string, array{start_time: float, start_memory: int}> Active timers with their start times */
   private static array $activeTimers = [];
 
   /** @var array<string, array{total_time: float, memory_delta: int, calls: int}> Timer statistics */
@@ -202,7 +202,7 @@ class PerformanceMonitor {
   /**
    * Generate a performance report
    *
-   * @return array{enabled: bool, active_timers: int, completed_timers: int, stats: array}
+   * @return array{enabled: bool, active_timers: int, completed_timers: int, stats: array<string, array{total_time: float, memory_delta: int, calls: int, avg_time: float}>}
    */
   public static function getReport(): array {
     return [

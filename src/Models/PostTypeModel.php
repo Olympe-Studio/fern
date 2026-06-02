@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Fern\Core\Models;
 
+use Fern\Core\Utils\Types;
 use InvalidArgumentException;
 use WP_Error;
 use WP_Post;
@@ -75,8 +76,23 @@ abstract class PostTypeModel {
   /**
    * Update a post.
    *
-   * @param int                  $id   Post ID
-   * @param array<string, mixed> $data Update data
+   * @param int $id Post ID
+   * @param array{
+   *     post_title?: string,
+   *     post_content?: string,
+   *     post_status?: string,
+   *     post_author?: int,
+   *     post_excerpt?: string,
+   *     post_date?: string,
+   *     post_date_gmt?: string,
+   *     post_parent?: int,
+   *     menu_order?: int,
+   *     post_password?: string,
+   *     comment_status?: string,
+   *     ping_status?: string,
+   *     post_name?: string,
+   *     meta_input?: array<string, mixed>
+   * } $data Update data
    *
    * @return int|WP_Error Post ID or error
    */
@@ -112,7 +128,7 @@ abstract class PostTypeModel {
       'orderby' => 'post__in',
     ])->get_posts();
 
-    return array_filter($posts, fn($post) => $post instanceof WP_Post);
+    return array_values(array_filter($posts, fn($post) => $post instanceof WP_Post));
   }
 
   /**
@@ -213,9 +229,15 @@ abstract class PostTypeModel {
     $counts = wp_count_posts(static::getPostType());
 
     if ($status !== 'any') {
-      return (int) $counts->{$status};
+      return Types::getSafeInt($counts->{$status});
     }
 
-    return array_map('intval', (array) $counts);
+    $result = [];
+
+    foreach ((array) $counts as $key => $value) {
+      $result[(string) $key] = Types::getSafeInt($value);
+    }
+
+    return $result;
   }
 }

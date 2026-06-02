@@ -27,6 +27,8 @@ class Config extends Singleton {
    * Constructor initializes the config array
    */
   protected function __construct() {
+    parent::__construct();
+
     $this->config = [];
     $this->configCache = [];
   }
@@ -115,7 +117,9 @@ class Config extends Singleton {
    * Show the config as json
    */
   public static function toJson(): string {
-    return JSON::encode(self::toArray()) ?: '';
+    $json = JSON::encode(self::toArray());
+
+    return $json === false ? '' : $json;
   }
 
   /**
@@ -151,6 +155,7 @@ class Config extends Singleton {
       throw new FernConfigurationExceptions('Config must be of type array, received: `' . gettype($config) . '`.');
     }
 
+    /** @var array<string, mixed> $config */
     $instance->setConfig($config);
 
     /**
