@@ -41,6 +41,8 @@ class Cache extends Singleton {
    * Initializes cache arrays and loads persistent cache.
    */
   public function __construct() {
+    parent::__construct();
+
     $this->cache = [];
     $this->persistentCache = [];
     $this->init();
@@ -202,7 +204,7 @@ class Cache extends Singleton {
     $persistentCache = $cache->getCaches()['persistent'];
 
     // Maybe we flushed the cache?
-    if (empty($persistentCache)) {
+    if ($persistentCache === []) {
       delete_option(self::PERSISTENT_CACHE_OPTION);
 
       return;
@@ -218,7 +220,7 @@ class Cache extends Singleton {
       update_option(self::PERSISTENT_CACHE_OPTION, $cleanPersistentCache, true);
     }
 
-    if (empty($cleanPersistentCache)) {
+    if ($cleanPersistentCache === []) {
       delete_option(self::PERSISTENT_CACHE_OPTION);
     }
 
@@ -231,13 +233,16 @@ class Cache extends Singleton {
   protected function init(): void {
     $persistent = get_option(self::PERSISTENT_CACHE_OPTION, []);
 
-    if (!empty($persistent)) {
-      $this->persistentCache = $this->removeExpiredItems($persistent);
+    if (!is_array($persistent) || $persistent === []) {
+      return;
+    }
 
-      // If items were removed due to expiration, mark as dirty
-      if (count($persistent) !== count($this->persistentCache)) {
-        $this->isDirty = true;
-      }
+    /** @var array<string, array{value: mixed, expires: int}> $persistent */
+    $this->persistentCache = $this->removeExpiredItems($persistent);
+
+    // If items were removed due to expiration, mark as dirty
+    if (count($persistent) !== count($this->persistentCache)) {
+      $this->isDirty = true;
     }
   }
 
@@ -278,10 +283,9 @@ class Cache extends Singleton {
       bool $persist,
   ): mixed {
     $key = $this->generateMemoKey($callback, $dependencies);
-    $cache = $this;
 
-    return function (...$args) use ($cache, $key, $callback, $persist, $expiration) {
-      $cached = $cache->_get($key);
+    return function (...$args) use ($key, $callback, $persist, $expiration) {
+      $cached = $this->_get($key);
 
       if ($cached !== null) {
         return $cached;
@@ -320,7 +324,7 @@ class Cache extends Singleton {
         $startLine = $reflection->getStartLine();
         $endLine = $reflection->getEndLine();
 
-        if ($fileName && $startLine && $endLine) {
+        if ($fileName !== false && $startLine !== false && $endLine !== false) {
           $file = file($fileName);
 
           if (!is_array($file)) {
@@ -336,13 +340,15 @@ class Cache extends Singleton {
         $callbackKey = $fileName . ':' . $startLine . ':' . $code;
       } elseif (is_array($callback)) {
         // Handle array callbacks (e.g., [$object, 'method'])
-        if (is_object($callback[0])) {
-          $callbackKey = spl_object_hash($callback[0]) . '::' . $callback[1];
+        $target = $callback[0];
+        $method = Types::getSafeString($callback[1]);
+
+        if (is_object($target)) {
+          $callbackKey = spl_object_hash($target) . '::' . $method;
         } else {
-          $callbackKey = $callback[0] . '::' . $callback[1];
+          $callbackKey = Types::getSafeString($target) . '::' . $method;
         }
-        /** @phpstan-ignore-next-line */
-      } elseif (is_string($callback) && is_callable($callback)) {
+      } elseif (is_string($callback)) {
         // Handle string callbacks (e.g., 'functionName')
         $callbackKey = $callback;
       } else {

@@ -6,6 +6,7 @@ namespace Fern\Core\Services\Views;
 
 use Fern\Core\Config;
 use Fern\Core\Context;
+use Fern\Core\Utils\Types;
 use Fern\Core\Wordpress\Filters;
 use InvalidArgumentException;
 
@@ -64,6 +65,7 @@ class Views {
       throw new InvalidArgumentException('Invalid data. Views data must be an array, received: ' . gettype($data) . '.');
     }
 
+    /** @var array<string, mixed> $data */
     $result = $engine->render($template, $data);
 
     /**
@@ -75,7 +77,7 @@ class Views {
      */
     $result = Filters::apply('fern:core:views:result', $result);
 
-    return $result;
+    return Types::getSafeString($result);
   }
 
   /**

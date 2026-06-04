@@ -6,6 +6,7 @@ namespace Fern\Core\Services\Pagination;
 
 use Fern\Core\Factory\Singleton;
 use Fern\Core\Services\HTTP\Request;
+use Fern\Core\Utils\Types;
 use RuntimeException;
 use WP_Query;
 use WP_Rewrite;
@@ -34,14 +35,6 @@ use WP_Rewrite;
  *   has_previous: bool,
  *   has_next: bool
  * }
- *
- * @method static int getCurrentPage()
- * @method static PaginationData getPaginationData(int $range = self::DEFAULT_PAGE_RANGE, ?int $postsPerPage = null, ?int $totalPages = null)
- * @method static PaginationData getCurrentPagination(int $range = self::DEFAULT_PAGE_RANGE, ?int $postsPerPage = null, ?int $totalPages = null)
- * @method static array<int|string> getPageRange(int $current, int $total, int $range = self::DEFAULT_PAGE_RANGE)
- * @method static PaginationLinks getPaginationLinks(int $current, int $total, int $range = self::DEFAULT_PAGE_RANGE)
- * @method static string getPageUrl(int $page, string $base = '')
- * @method static bool hasPagination()
  */
 class Pagination extends Singleton {
   public const DEFAULT_PAGE_RANGE = 2;
@@ -57,8 +50,10 @@ class Pagination extends Singleton {
    * Initialize pagination with WordPress state
    */
   public function __construct() {
+    parent::__construct();
+
     global $wp_query;
-    $this->wpQuery = $wp_query;
+    $this->wpQuery = $wp_query instanceof WP_Query ? $wp_query : null;
   }
 
   /**
@@ -85,16 +80,18 @@ class Pagination extends Singleton {
   public static function getCurrentPage(): int {
     global $paged, $page;
 
-    if (get_query_var(self::PAGE_QUERY_VAR)) {
-      return (int) get_query_var(self::PAGE_QUERY_VAR);
+    $pageVar = Types::getSafeInt(get_query_var(self::PAGE_QUERY_VAR));
+
+    if ($pageVar > 0) {
+      return $pageVar;
     }
 
     if ($paged) {
-      return (int) $paged;
+      return Types::getSafeInt($paged);
     }
 
     if ($page) {
-      return (int) $page;
+      return Types::getSafeInt($page);
     }
 
     return 1;
@@ -125,12 +122,12 @@ class Pagination extends Singleton {
   public function getPaginationData(int $range = self::DEFAULT_PAGE_RANGE, ?int $postsPerPage = null, ?int $totalPages = null): array {
     $currentPage = self::getCurrentPage();
     $query = $this->getQuery();
-    $foundPosts = (int) $query->found_posts;
+    $foundPosts = $query->found_posts;
 
     // Get actual posts per page
-    $perPage = $postsPerPage ?? (int) $query->query_vars['posts_per_page'];
+    $perPage = $postsPerPage ?? Types::getSafeInt($query->query_vars['posts_per_page'] ?? 0);
     if ($perPage <= 0) {
-      $perPage = get_option('posts_per_page', 10);
+      $perPage = Types::getSafeInt(get_option('posts_per_page', 10));
     }
 
     // Use explicit total pages if provided (for custom queries)
@@ -262,7 +259,7 @@ class Pagination extends Singleton {
   public function getPageUrl(int $page, string $base = ''): string {
     global $wp_rewrite;
 
-    if (!$base) {
+    if ($base === '') {
       $base = get_pagenum_link(1, false);
     }
 
@@ -284,7 +281,7 @@ class Pagination extends Singleton {
    * @return bool
    */
   public function hasPagination(?int $totalPages = null): bool {
-    $totalPages ??= (int) $this->getQuery()->max_num_pages;
+    $totalPages ??= $this->getQuery()->max_num_pages;
     return $totalPages > 1;
   }
 
@@ -309,7 +306,7 @@ class Pagination extends Singleton {
    */
   public function hasNextPage(?int $current = null, ?int $totalPages = null): bool {
     $current ??= self::getCurrentPage();
-    $totalPages ??= (int) $this->getQuery()->max_num_pages;
+    $totalPages ??= $this->getQuery()->max_num_pages;
 
     return $current < $totalPages;
   }
@@ -336,8 +333,8 @@ class Pagination extends Singleton {
   public function getSummary(?int $postsPerPage = null): string {
     $query = $this->getQuery();
     $current = self::getCurrentPage();
-    $perPage = $postsPerPage ?? (int) $query->query_vars['posts_per_page'];
-    $total = (int) $query->found_posts;
+    $perPage = $postsPerPage ?? Types::getSafeInt($query->query_vars['posts_per_page'] ?? 0);
+    $total = $query->found_posts;
 
     $from = (($current - 1) * $perPage) + 1;
     $to = min($current * $perPage, $total);

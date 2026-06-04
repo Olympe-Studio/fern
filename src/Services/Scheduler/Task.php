@@ -76,7 +76,11 @@ class Task {
    * @param bool $unschedule Whether to unschedule the task after running
    */
   public function runNow(bool $unschedule = false): void {
-    call_user_func($this->getCallback(), ...$this->getArgs());
+    $callback = $this->getCallback();
+
+    if (is_callable($callback)) {
+      call_user_func($callback, ...$this->getArgs());
+    }
 
     if ($unschedule) {
       Scheduler::unschedule($this->getName());

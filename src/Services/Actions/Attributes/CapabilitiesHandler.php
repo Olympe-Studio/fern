@@ -13,10 +13,10 @@ class CapabilitiesHandler implements AttributesHandler {
   /**
    * Handle the RequireCapabilities attribute
    *
-   * @param ReflectionAttribute<RequireCapabilities> $attribute  The attribute instance
-   * @param object                                   $controller The controller instance
-   * @param string                                   $methodName The method name
-   * @param Request                                  $request    The current request
+   * @param ReflectionAttribute<object> $attribute  The attribute instance
+   * @param object                      $controller The controller instance
+   * @param string                      $methodName The method name
+   * @param Request                     $request    The current request
    *
    * @return bool|string Returns true if the attribute is valid, or an error message
    */
@@ -26,12 +26,13 @@ class CapabilitiesHandler implements AttributesHandler {
       string $methodName,
       Request $request,
   ): bool|string {
-    if (!isset($attribute->newInstance()->capabilities)) {
-      // No capabilities required
+    $instance = $attribute->newInstance();
+
+    if (!$instance instanceof RequireCapabilities) {
       return true;
     }
 
-    foreach ($attribute->newInstance()->capabilities as $capability) {
+    foreach ($instance->capabilities as $capability) {
       if (!current_user_can($capability)) {
         return "Missing required capability: {$capability}";
       }

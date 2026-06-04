@@ -6,6 +6,7 @@ namespace Fern\Core\Services\Mail;
 
 use Fern\Core\Factory\Singleton;
 use Fern\Core\Services\Views\Views;
+use Fern\Core\Utils\Types;
 use Fern\Core\Wordpress\Filters;
 
 use function wp_mail;
@@ -40,12 +41,19 @@ final class Mail extends Singleton {
       'attachments' => $attachments,
     ]);
 
+    /** @var string|array<int, string> $to */
+    $to = $payload['to'] ?? $to;
+    /** @var string|array<int, string> $payloadHeaders */
+    $payloadHeaders = $payload['headers'] ?? $headers;
+    /** @var string|array<int, string> $payloadAttachments */
+    $payloadAttachments = $payload['attachments'] ?? $attachments;
+
     $sent = wp_mail(
-      $payload['to'],
-      (string) $payload['subject'],
-      (string) $payload['message'],
-      $payload['headers'],
-      $payload['attachments'],
+      $to,
+      Types::getSafeString($payload['subject'] ?? $subject),
+      Types::getSafeString($payload['message'] ?? $body),
+      $payloadHeaders,
+      $payloadAttachments,
     );
 
     return $sent;
@@ -59,7 +67,7 @@ final class Mail extends Singleton {
   private static function renderBody(string $view, array $data): string {
     $body = Views::render($view, $data);
 
-    return Filters::apply('fern:core:mail:body', $body, $view, $data);
+    return Types::getSafeString(Filters::apply('fern:core:mail:body', $body, $view, $data));
   }
 
   /**
@@ -82,6 +90,10 @@ final class Mail extends Singleton {
       $headers[] = 'Content-Type: text/html; charset=UTF-8';
     }
 
-    return Filters::apply('fern:core:mail:headers', $headers);
+    $filtered = Filters::apply('fern:core:mail:headers', $headers);
+    /** @var array<int, string> $headers */
+    $headers = is_array($filtered) ? $filtered : $headers;
+
+    return $headers;
   }
 }

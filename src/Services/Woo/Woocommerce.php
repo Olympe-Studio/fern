@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Fern\Core\Services\Woo;
 
+use Fern\Core\Utils\Types;
 use Fern\Core\Wordpress\Filters;
 
 /**
@@ -92,7 +93,7 @@ class Woocommerce {
 
       return [
         'page' => 'checkout',
-        'subPage' => $endpoint ?: null,
+        'subPage' => $endpoint === '' ? null : $endpoint,
       ];
     }
 
@@ -101,7 +102,7 @@ class Woocommerce {
 
       return [
         'page' => 'my-account',
-        'subPage' => $endpoint ?: null,
+        'subPage' => $endpoint === '' ? null : $endpoint,
       ];
     }
 
@@ -118,8 +119,8 @@ class Woocommerce {
       return [];
     }
 
-    if (empty(self::$config)) {
-      self::$config = Filters::apply('fern:woo:config', [
+    if (self::$config === []) {
+      $resolved = Filters::apply('fern:woo:config', [
         // Currency and Price Settings
 
         'currency' => html_entity_decode(get_woocommerce_currency(), ENT_QUOTES, 'UTF-8'),
@@ -127,14 +128,14 @@ class Woocommerce {
         'currency_symbol' => html_entity_decode(get_woocommerce_currency_symbol(), ENT_QUOTES, 'UTF-8'),
         'currency_position' => get_option('woocommerce_currency_pos'),
 
-        'thousand_separator' => html_entity_decode(WC_get_price_thousand_separator(), ENT_QUOTES, 'UTF-8'),
+        'thousand_separator' => html_entity_decode(wc_get_price_thousand_separator(), ENT_QUOTES, 'UTF-8'),
 
-        'decimal_separator' => html_entity_decode(WC_get_price_decimal_separator(), ENT_QUOTES, 'UTF-8'),
+        'decimal_separator' => html_entity_decode(wc_get_price_decimal_separator(), ENT_QUOTES, 'UTF-8'),
 
-        'price_decimals' => WC_get_price_decimals(),
+        'price_decimals' => wc_get_price_decimals(),
 
         // Tax Settings
-        'tax_enabled' => WC_tax_enabled(),
+        'tax_enabled' => wc_tax_enabled(),
         'calc_taxes' => get_option('woocommerce_calc_taxes'),
         'tax_display_shop' => get_option('woocommerce_tax_display_shop'),
         'tax_display_cart' => get_option('woocommerce_tax_display_cart'),
@@ -145,7 +146,7 @@ class Woocommerce {
         'checkout_page_url' => wc_get_checkout_url(),
         'account_page_url' => wc_get_account_endpoint_url('dashboard'),
         'shop_page_url' => get_permalink(wc_get_page_id('shop')),
-        'terms_page_url' => get_permalink(get_option('woocommerce_terms_page_id')),
+        'terms_page_url' => get_permalink(Types::getSafeInt(get_option('woocommerce_terms_page_id'))),
 
         // Store Information
         'store_address' => get_option('woocommerce_store_address'),
@@ -195,6 +196,10 @@ class Woocommerce {
           ],
         ],
       ]);
+
+      $resolved = is_array($resolved) ? $resolved : [];
+      /** @var array<string, mixed> $resolved */
+      self::$config = $resolved;
     }
 
     return self::$config;
@@ -206,7 +211,7 @@ class Woocommerce {
    * @return array<string, array<string, string>>
    */
   public static function getTexts(): array {
-    if (empty(self::$strings)) {
+    if (self::$strings === []) {
       self::$strings = self::initStrings();
     }
 
@@ -254,8 +259,8 @@ class Woocommerce {
    *
    * @return array<string, array<string, string>>
    */
-  private static function initStrings() {
-    return Filters::apply('fern:woo:texts', [
+  private static function initStrings(): array {
+    $texts = Filters::apply('fern:woo:texts', [
       'general' => [
         'shop' => __('Shop', 'woocommerce'),
         'account' => __('My account', 'woocommerce'),
@@ -412,5 +417,9 @@ class Woocommerce {
         'excl' => __('Excluding tax', 'woocommerce'),
       ],
     ]);
+
+    $texts = is_array($texts) ? $texts : [];
+    /** @var array<string, array<string, string>> $texts */
+    return $texts;
   }
 }

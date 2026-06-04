@@ -6,6 +6,7 @@ namespace Fern\Core\Services\REST;
 
 use Exception;
 use Fern\Core\Factory\Singleton;
+use Fern\Core\Logger\Logger;
 use Fern\Core\Services\HTTP\Reply;
 use Fern\Core\Services\HTTP\Request;
 use Fern\Core\Wordpress\Events;
@@ -111,8 +112,8 @@ class API extends Singleton {
    * @return void
    */
   public function registerRoutes(): void {
-    $namespace = trim((string) ($this->config['namespace'] ?? 'fern'), '/');
-    $version = (string) ($this->config['version'] ?? '1');
+    $namespace = trim($this->config['namespace'] ?? 'fern', '/');
+    $version = $this->config['version'] ?? '1';
     $base = sprintf('%s/v%s', $namespace, $version);
 
     foreach ($this->routes as $route) {
@@ -157,11 +158,9 @@ class API extends Singleton {
     ];
 
     if ($permission !== null) {
-      /** @var callable(WP_REST_Request<array<string,mixed>>): bool $permission */
       $route['permission'] = $permission;
     }
 
-    /** @var Route $route */
     $instance->routes[$key] = $route;
 
     return $instance;
@@ -217,9 +216,21 @@ class API extends Singleton {
 
         return new WP_REST_Response($result, 200);
       } catch (Throwable $e) {
+        $errorId = $this->createErrorId('rest');
+        Logger::error('REST handler execution failed', [
+          'error_id' => $errorId,
+          'route' => $wpRequest->get_route(),
+          'method' => $wpRequest->get_method(),
+          'exception' => get_class($e),
+          'message' => $e->getMessage(),
+          'file' => $e->getFile(),
+          'line' => $e->getLine(),
+        ]);
+
         if ($this->config['useFernReply'] ?? false) {
           $reply = new Reply(500, [
-            'message' => $e->getMessage(),
+            'message' => 'Internal server error.',
+            'error_id' => $errorId,
             'code' => 500,
             'success' => false,
           ]);
@@ -229,10 +240,24 @@ class API extends Singleton {
 
         return new WP_Error(
           'rest_error',
-          $e->getMessage(),
-          ['status' => 500],
+          'Internal server error.',
+          [
+            'status' => 500,
+            'error_id' => $errorId,
+          ],
         );
       }
     };
+  }
+
+  /**
+   * Build a correlation ID for client-facing error responses.
+   */
+  private function createErrorId(string $prefix): string {
+    if (function_exists('wp_generate_uuid4')) {
+      return $prefix . '_' . wp_generate_uuid4();
+    }
+
+    return $prefix . '_' . uniqid('', true);
   }
 }

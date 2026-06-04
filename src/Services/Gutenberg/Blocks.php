@@ -10,6 +10,7 @@ use Fern\Core\Fern;
 use Fern\Core\Logger\Logger;
 use Fern\Core\Services\Views\Views;
 use Fern\Core\Utils\JSON;
+use Fern\Core\Utils\Types;
 use Fern\Core\Wordpress\Events;
 use Fern\Core\Wordpress\Filters;
 
@@ -84,12 +85,14 @@ final class Blocks extends Singleton {
   protected ?array $manifest = null;
 
   public function __construct() {
+    parent::__construct();
+
     // Allow consumers to override where the build manifest is located.
     $defaultPath = untrailingslashit(Fern::getRoot()) . self::DEFAULT_MANIFEST_PATH;
-    $this->manifestPath = Filters::apply('fern:gutenberg:manifest_path', $defaultPath);
+    $this->manifestPath = Types::getSafeString(Filters::apply('fern:gutenberg:manifest_path', $defaultPath));
 
     // Allow consumers to define their own cache key.
-    $this->cacheKey = Filters::apply('fern:gutenberg:manifest_cache_key', self::DEFAULT_MANIFEST_CACHE_KEY);
+    $this->cacheKey = Types::getSafeString(Filters::apply('fern:gutenberg:manifest_cache_key', self::DEFAULT_MANIFEST_CACHE_KEY));
   }
 
   /* --------------------------------------------------------------------- */
@@ -149,7 +152,10 @@ final class Blocks extends Singleton {
      *
      * @param array<int, array<string,string>> $categories Current list.
      */
-    return Filters::apply('fern:gutenberg:block_categories', $categories);
+    $result = Filters::apply('fern:gutenberg:block_categories', $categories);
+    $result = is_array($result) ? $result : $categories;
+    /** @var array<int, array<string, string>> $result */
+    return $result;
   }
 
   /* --------------------------------------------------------------------- */
@@ -162,9 +168,11 @@ final class Blocks extends Singleton {
   public function registerBlocks(): void {
     // Base directory can be altered via filter.
     $basePath = untrailingslashit(
-      Filters::apply(
-        'fern:gutenberg:blocks_base_path',
-        trailingslashit(Fern::getRoot()) . 'App/Blocks'
+      Types::getSafeString(
+        Filters::apply(
+          'fern:gutenberg:blocks_base_path',
+          trailingslashit(Fern::getRoot()) . 'App/Blocks'
+        )
       )
     );
 
@@ -178,8 +186,10 @@ final class Blocks extends Singleton {
      * @param array<int,string> $paths
      */
     $paths = Filters::apply('fern:gutenberg:blocks_register', []);
+    $paths = is_array($paths) ? $paths : [];
 
     foreach ($paths as $dir) {
+      $dir = Types::getSafeString($dir);
       $dir = str_starts_with($dir, '/') ? $dir : trailingslashit($basePath) . ltrim($dir, '/');
       $this->registerBlockPath($dir);
     }
@@ -205,6 +215,7 @@ final class Blocks extends Singleton {
     $settings = json_decode($jsonContent, true, 512, JSON_THROW_ON_ERROR);
     if (is_array($settings)) {
       $settings['render_callback'] = [self::class, 'renderBlock'];
+      /** @var array{render_callback: callable} $settings */
       register_block_type($dir, $settings);
     }
   }
@@ -227,7 +238,7 @@ final class Blocks extends Singleton {
      * Gives the application a chance to alter the rendered HTML before it is
      * returned to WordPress.
      */
-    return Filters::apply('fern:gutenberg:render_block:html', $html, $block);
+    return Types::getSafeString(Filters::apply('fern:gutenberg:render_block:html', $html, $block));
   }
 
   /* --------------------------------------------------------------------- */
@@ -338,7 +349,9 @@ final class Blocks extends Singleton {
     $cached = get_transient($this->cacheKey);
 
     if ($cached !== false) {
-      $this->manifest = $cached;
+      $manifest = is_array($cached) ? $cached : null;
+      /** @var array<string, mixed>|null $manifest */
+      $this->manifest = $manifest;
 
       return;
     }
@@ -353,7 +366,10 @@ final class Blocks extends Singleton {
       throw new Exception('Unable to read manifest file.');
     }
 
-    $this->manifest = JSON::decode($manifestContent, true);
+    $decoded = JSON::decode($manifestContent, true);
+    $manifest = is_array($decoded) ? $decoded : null;
+    /** @var array<string, mixed>|null $manifest */
+    $this->manifest = $manifest;
 
     // Cache for 12 hours.
     set_transient($this->cacheKey, $this->manifest, 12 * HOUR_IN_SECONDS);
@@ -372,16 +388,25 @@ final class Blocks extends Singleton {
       return;
     }
 
-    if (!isset($manifest['pages'][$path])) {
+    $pages = $manifest['pages'] ?? [];
+
+    if (!is_array($pages) || !isset($pages[$path]) || !is_array($pages[$path])) {
       Logger::info('Block not found in manifest: ' . $path);
       return;
     }
 
-    $blockData = $manifest['pages'][$path];
+    $blockData = $pages[$path];
     $this->processedBlocks[$path] = true;
 
-    $this->extractAssets($blockData['styles'] ?? [], 'css');
-    $this->extractAssets($blockData['scripts'] ?? [], 'js');
+    $styles = $blockData['styles'] ?? [];
+    $styles = is_array($styles) ? $styles : [];
+    /** @var array<int, array<string, string>> $styles */
+    $this->extractAssets($styles, 'css');
+
+    $scripts = $blockData['scripts'] ?? [];
+    $scripts = is_array($scripts) ? $scripts : [];
+    /** @var array<int, array<string, string>> $scripts */
+    $this->extractAssets($scripts, 'js');
   }
 
   /**
@@ -421,13 +446,13 @@ final class Blocks extends Singleton {
         return '';
       }
 
-      $namespaced = (string) $attributes['name'];
+      $namespaced = Types::getSafeString($attributes['name']);
       $parts      = array_map('ucfirst', explode('/', $namespaced));
 
       return count($parts) === 1 ? $parts[0] : $parts[1];
     }
 
-    return (string) $attributes['view'];
+    return Types::getSafeString($attributes['view']);
   }
 
   /**
@@ -445,13 +470,16 @@ final class Blocks extends Singleton {
     $blockName = $block['blockName'] ?? '';
 
     // Give apps a chance to skip / transform the collection logic.
-    $shouldQueue = Filters::apply('fern:gutenberg:assets:should_queue', true, $blockName, $block);
+    $shouldQueue = Types::getSafeBool(Filters::apply('fern:gutenberg:assets:should_queue', true, $blockName, $block));
 
     if (!$shouldQueue) {
       return $html;
     }
 
-    $name = self::getBlockName($block['attrs'] ?? []);
+    $attrs = $block['attrs'] ?? [];
+    $attrs = is_array($attrs) ? $attrs : [];
+    /** @var array<string, mixed> $attrs */
+    $name = self::getBlockName($attrs);
 
     /** @var string $name */
     $name = Filters::apply('fern:gutenberg:assets:block_name', $name, $block);
@@ -506,14 +534,17 @@ final class Blocks extends Singleton {
 
     $preData = Filters::apply('fern:gutenberg:pre_render_block', [], $blockName, $hookAttributes);
 
-    if (!empty($preData)) {
+    if (is_array($preData) && $preData !== []) {
+      $existingData = $blockData['data'] ?? [];
+      $existingData = is_array($existingData) ? $existingData : [];
       $blockData['data'] = [
-        ...($blockData['data'] ?? []),
+        ...$existingData,
         ...$preData,
       ];
     }
 
     $attrs = $blockData['data'] ?? [];
+    $attrs = is_array($attrs) ? $attrs : [];
 
     // Always expose ACF field values under a `fields` key for consistency.
     if (!array_key_exists('fields', $attrs)) {
@@ -522,20 +553,24 @@ final class Blocks extends Singleton {
     }
 
     // Derive view name using helper, but let apps override completely.
-    $defaultView = ucfirst(self::getBlockName(['name' => $blockName] + $attrs));
-    $view        = Filters::apply('fern:gutenberg:render_block_view', $defaultView, $blockData);
+    $nameAttrs = ['name' => $blockName] + $attrs;
+    /** @var array<string, mixed> $nameAttrs */
+    $defaultView = ucfirst(self::getBlockName($nameAttrs));
+    $view        = Types::getSafeString(Filters::apply('fern:gutenberg:render_block_view', $defaultView, $blockData));
 
     /** @var string|null $html */
     $html = Filters::apply('fern:gutenberg:render_block_override', null, $defaultView, $blockData);
 
     $data = Filters::apply('fern:gutenberg:render_block_data', $attrs, $blockData, $view);
+    $data = is_array($data) ? $data : [];
+    /** @var array<string, mixed> $data */
 
     if (!is_string($html)) {
       $html = Views::render($view, $data, true);
     }
 
     // Allow last-minute modification of produced HTML.
-    $html = Filters::apply('fern:gutenberg:render_block_html', $html, $blockData);
+    $html = Types::getSafeString(Filters::apply('fern:gutenberg:render_block_html', $html, $blockData));
 
     echo $html;
   }

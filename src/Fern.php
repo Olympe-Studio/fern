@@ -14,6 +14,7 @@ use Fern\Core\Services\Router\Router;
 use Fern\Core\Services\Wordpress\Images;
 use Fern\Core\Services\Wordpress\Wordpress;
 use Fern\Core\Utils\Autoloader;
+use Fern\Core\Utils\Types;
 use Fern\Core\Wordpress\Events;
 
 /**
@@ -76,7 +77,7 @@ class Fern extends Singleton {
    * Get the root path
    */
   public static function getRoot(): string {
-    return Config::get('root');
+    return Types::getSafeString(Config::get('root'));
   }
 
   /**
@@ -137,8 +138,13 @@ class Fern extends Singleton {
   private static function bootThemeSupport(): void {
     Events::on('after_setup_theme', static function (): void {
       $theme = Config::get('theme', []);
-      $themeSupport = $theme['support'] ?? [];
-      $menus = $theme['menus'] ?? [];
+      $theme = is_array($theme) ? $theme : [];
+
+      /** @var array<string, mixed> $themeSupport */
+      $themeSupport = isset($theme['support']) && is_array($theme['support']) ? $theme['support'] : [];
+
+      /** @var array<string, string> $menus */
+      $menus = isset($theme['menus']) && is_array($theme['menus']) ? $theme['menus'] : [];
 
       foreach ($themeSupport as $feature => $value) {
         if ($value === true) {

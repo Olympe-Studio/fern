@@ -28,10 +28,25 @@ class Gutenberg extends Singleton {
   protected $blockInclude;
 
   public function __construct() {
-    $config = Config::get('theme.gutenberg') ?: [];
-    $this->showOnPostTypes = $config['show_on_post_types'] ?? [];
-    $this->blockExclude = $config['core_block_exclude'] ?? [];
-    $this->blockInclude = $config['core_block_include'] ?? null;
+    parent::__construct();
+
+    $config = Config::get('theme.gutenberg');
+    $config = is_array($config) ? $config : [];
+
+    $showOnPostTypes = $config['show_on_post_types'] ?? [];
+    $showOnPostTypes = is_array($showOnPostTypes) ? $showOnPostTypes : [];
+    /** @var array<string|int> $showOnPostTypes */
+    $this->showOnPostTypes = $showOnPostTypes;
+
+    $blockExclude = $config['core_block_exclude'] ?? [];
+    $blockExclude = is_array($blockExclude) ? $blockExclude : [];
+    /** @var array<string|int, string> $blockExclude */
+    $this->blockExclude = $blockExclude;
+
+    $blockInclude = $config['core_block_include'] ?? null;
+    $blockInclude = is_array($blockInclude) ? $blockInclude : null;
+    /** @var array<string>|null $blockInclude */
+    $this->blockInclude = $blockInclude;
   }
 
   /**
@@ -60,11 +75,11 @@ class Gutenberg extends Singleton {
     global $post;
 
     if ($pt === 'page') {
-      if (!$post) {
+      if (!$post instanceof \WP_Post) {
         return false;
       }
 
-      $postId = (int) $post->ID;
+      $postId = $post->ID;
       $pageIds = array_filter($this->showOnPostTypes, function ($value) {
         return is_numeric($value) && (int) $value > 0;
       });
@@ -89,7 +104,7 @@ class Gutenberg extends Singleton {
     }
 
     // If core_block_exclude is defined, get all blocks and remove excluded ones
-    if (!empty($this->blockExclude)) {
+    if ($this->blockExclude !== []) {
       /** @var array<string, WP_Block_Type> */
       $registeredBlocks = WP_Block_Type_Registry::get_instance()->get_all_registered();
 
@@ -153,7 +168,7 @@ class Gutenberg extends Singleton {
     $registry = WP_Block_Type_Registry::get_instance();
     $block = $registry->get_registered($blockName);
 
-    if ($block && isset($block->category)) {
+    if ($block !== null && isset($block->category)) {
       return $block->category;
     }
 

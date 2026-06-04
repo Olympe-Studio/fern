@@ -6,6 +6,7 @@ namespace Fern\Core\Services\HTTP;
 
 use Fern\Core\Errors\ReplyParsingError;
 use Fern\Core\Utils\JSON;
+use Fern\Core\Utils\Types;
 use Fern\Core\Wordpress\Events;
 use Fern\Core\Wordpress\Filters;
 use RuntimeException;
@@ -77,20 +78,22 @@ class Reply {
    * @return Reply The Reply instance
    */
   public static function fromArray(array $data): Reply {
-    $reply = new self(
-      $data['status'] ?? 200,
-      self::unserializeBody($data['body'] ?? ''),
-      $data['content_type'] ?? 'text/html',
-      $data['headers'] ?? [],
-    );
+    $status = Types::getSafeInt($data['status'] ?? 200);
+    $body = self::unserializeBody($data['body'] ?? '');
+    $contentType = Types::getSafeString($data['content_type'] ?? 'text/html');
 
-    if (isset($data['trailers'])) {
+    $headers = $data['headers'] ?? [];
+    $headers = is_array($headers) ? $headers : [];
+    /** @var array<string, mixed> $headers */
+    $reply = new self($status, $body, $contentType, $headers);
+
+    if (isset($data['trailers']) && is_array($data['trailers'])) {
       foreach ($data['trailers'] as $name => $value) {
-        $reply->addTrailer($name, $value);
+        $reply->addTrailer((string) $name, $value);
       }
     }
 
-    if (!empty($data['hijacked'])) {
+    if (Types::getSafeBool($data['hijacked'] ?? false)) {
       $reply->hijack();
     }
 
@@ -401,7 +404,7 @@ class Reply {
     $this->applyHeaders();
 
     if (!headers_sent()) {
-      header('Content-Type: ' . $this->contentType . '; charset=' . get_option('blog_charset'));
+      header('Content-Type: ' . $this->contentType . '; charset=' . Types::getSafeString(get_option('blog_charset')));
       @http_response_code($this->status);
     }
 
@@ -434,6 +437,8 @@ class Reply {
        */
       $content = Filters::apply('fern:core:reply:will_be_send', $body, $this);
     }
+
+    $content = Types::getSafeString($content);
 
     $isChunked = $this->hasHeader('Transfer-Encoding') && $this->getHeader('Transfer-Encoding') === 'chunked';
 
@@ -487,7 +492,12 @@ class Reply {
    */
   protected function serializeBody(mixed $body): string|array {
     if ($this->contentType === 'application/json') {
-      return is_array($body) ? $body : [];
+      if (is_array($body)) {
+        /** @var array<string, mixed> $body */
+        return $body;
+      }
+
+      return [];
     }
 
     if (is_object($body) && method_exists($body, '__toString')) {
@@ -495,10 +505,12 @@ class Reply {
     }
 
     if (is_resource($body)) {
-      return stream_get_contents($body) ?: '';
+      $contents = stream_get_contents($body);
+
+      return $contents === false ? '' : $contents;
     }
 
-    return (string) $body;
+    return Types::getSafeString($body);
   }
 
   /**
@@ -511,7 +523,7 @@ class Reply {
       return $body;
     }
 
-    return (string) $body;
+    return Types::getSafeString($body);
   }
 
   /**
@@ -520,11 +532,11 @@ class Reply {
   private function applyHeaders(): void {
     // Apply regular headers first
     foreach ($this->headers as $name => $value) {
-      header("{$name}: {$value}");
+      header("{$name}: " . Types::getSafeString($value));
     }
 
     // Handle chunked transfer encoding if trailers are present
-    if (!empty($this->trailers)) {
+    if ($this->trailers !== []) {
       $this->removeHeader('Transfer-Encoding');
       header('Transfer-Encoding: chunked');
 
@@ -543,7 +555,7 @@ class Reply {
    * Apply the Trailers of the current Reply.
    */
   private function applyTrailers(): void {
-    if (!empty($this->trailers)) {
+    if ($this->trailers !== []) {
       // Ensure we're using chunked transfer encoding
       if (!$this->hasHeader('Transfer-Encoding') || $this->getHeader('Transfer-Encoding') !== 'chunked') {
         throw new RuntimeException('Trailers can only be sent with chunked Transfer-Encoding');
@@ -554,7 +566,7 @@ class Reply {
 
       // Send trailers
       foreach ($this->trailers as $name => $value) {
-        echo "{$name}: {$value}\r\n";
+        echo "{$name}: " . Types::getSafeString($value) . "\r\n";
       }
 
       // End of trailers

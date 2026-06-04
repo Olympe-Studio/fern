@@ -7,6 +7,7 @@ namespace Fern\Core\Services\Shortcode;
 use Fern\Core\Factory\Singleton;
 use Fern\Core\Wordpress\Filters;
 use Fern\Core\Services\Views\Views;
+use Fern\Core\Utils\Types;
 use Fern\Core\Wordpress\Events;
 
 /**
@@ -23,6 +24,7 @@ final class Shortcode extends Singleton {
    */
   public function register(string $tag, array $allowedArgs, string $viewTemplate, ?callable $augment = null): void {
     $callback = function (array $rawAttrs = [], string $content = '') use ($tag, $allowedArgs, $viewTemplate, $augment): string {
+      /** @var array<string, mixed> $rawAttrs */
       return $this->renderShortcode($tag, $allowedArgs, $viewTemplate, $augment, $rawAttrs, $content);
     };
 
@@ -40,9 +42,11 @@ final class Shortcode extends Singleton {
    */
   private function renderShortcode(string $tag, array $allowed, string $template, ?callable $augment, array $raw, string $content): string {
     $attrs = array_intersect_key($raw, array_flip($allowed));
-    $attrs = Filters::apply('fern:core:shortcode:attrs', $attrs, $tag, $content);
+    $filteredAttrs = Filters::apply('fern:core:shortcode:attrs', $attrs, $tag, $content);
+    /** @var array<string, mixed> $attrs */
+    $attrs = is_array($filteredAttrs) ? $filteredAttrs : [];
 
-    if ($augment) {
+    if ($augment !== null) {
       $attrs = [...$attrs, ...$augment($attrs, $content)];
     }
 
@@ -51,7 +55,9 @@ final class Shortcode extends Singleton {
       'content' => $content,
     ];
 
-    $data = Filters::apply('fern:core:shortcode:data', $data, $tag);
+    $filteredData = Filters::apply('fern:core:shortcode:data', $data, $tag);
+    /** @var array<string, mixed> $data */
+    $data = is_array($filteredData) ? $filteredData : $data;
 
     // Let devs render via hook. Capture echoed output.
     $html = Events::renderToString('fern:core:shortcode:render', [$tag, $data]);
@@ -60,6 +66,6 @@ final class Shortcode extends Singleton {
       $html = Views::render($template, $data, true);
     }
 
-    return Filters::apply('fern:core:shortcode:html', $html, $tag, $data);
+    return Types::getSafeString(Filters::apply('fern:core:shortcode:html', $html, $tag, $data));
   }
 }

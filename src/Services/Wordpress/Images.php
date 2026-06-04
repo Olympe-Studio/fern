@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Fern\Core\Services\Wordpress;
 
 use Fern\Core\Config;
+use Fern\Core\Utils\Types;
 use Fern\Core\Wordpress\Events;
 use Fern\Core\Wordpress\Filters;
 use InvalidArgumentException;
@@ -29,8 +30,8 @@ use InvalidArgumentException;
  *     custom_sizes: array<string, ImageSize>
  * }
  * @phpstan-type ImagesConfig array{
- *     disabled: bool,
- *     settings: ImageSettings
+ *     disabled: mixed,
+ *     settings: array<string, mixed>
  * }
  */
 class Images {
@@ -55,7 +56,7 @@ class Images {
   /**
    * Images constructor.
    *
-   * @param ImagesConfig $config The configuration array for image processing
+   * @param array<string, mixed> $config The configuration array for image processing
    */
   public function __construct(array $config) {
     $this->config = $this->normalizeConfig($config);
@@ -68,6 +69,8 @@ class Images {
    */
   public static function boot(): void {
     $config = Config::get('core.images');
+    $config = is_array($config) ? $config : [];
+    /** @var array<string, mixed> $config */
     new self($config);
   }
 
@@ -123,7 +126,7 @@ class Images {
    * @return int The JPEG quality setting from the configuration, or 100 if not set
    */
   public function setJpegQuality(): int {
-    return $this->config['settings']['jpeg_quality'] ?? self::DEFAULT_JPEG_QUALITY;
+    return Types::getSafeInt($this->config['settings']['jpeg_quality'] ?? self::DEFAULT_JPEG_QUALITY);
   }
 
   /**
@@ -156,16 +159,21 @@ class Images {
    * This method adds the custom image sizes defined in the configuration.
    */
   public function addCustomImageSizes(): void {
-    if (!isset($this->config['settings']['custom_sizes'])) {
+    $customSizes = $this->config['settings']['custom_sizes'] ?? [];
+
+    if (!is_array($customSizes)) {
       return;
     }
 
-    foreach ($this->config['settings']['custom_sizes'] as $name => $size) {
-      if (!isset($size['width'], $size['height'])) {
+    foreach ($customSizes as $name => $size) {
+      if (!is_array($size) || !isset($size['width'], $size['height'])) {
         throw new InvalidArgumentException("Invalid custom size configuration for '{$name}', both width and height must be set.");
       }
 
-      add_image_size($name, $size['width'], $size['height'], $size['crop'] ?? false);
+      $crop = $size['crop'] ?? false;
+      $crop = is_array($crop) ? $crop : (bool) $crop;
+      /** @var array{string, string}|bool $crop */
+      add_image_size((string) $name, Types::getSafeInt($size['width']), Types::getSafeInt($size['height']), $crop);
     }
   }
 
@@ -179,11 +187,18 @@ class Images {
    * @return array<string, mixed> The modified list of image sizes including custom sizes
    */
   public function addCustomImageSizesToEditor(array $sizes): array {
-    foreach ($this->config['settings']['custom_sizes'] as $name => $size) {
-      if (!isset($size['width'], $size['height'])) {
+    $customSizes = $this->config['settings']['custom_sizes'] ?? [];
+
+    if (!is_array($customSizes)) {
+      return $sizes;
+    }
+
+    foreach ($customSizes as $name => $size) {
+      if (!is_array($size) || !isset($size['width'], $size['height'])) {
         throw new InvalidArgumentException("Invalid custom size configuration for '{$name}', both width and height must be set.");
       }
 
+      $name = (string) $name;
       $sizes[$name] = $size['label'] ?? ucfirst(str_replace('_', ' ', $name));
     }
 
@@ -199,7 +214,7 @@ class Images {
     // Always set JPEG quality
     Filters::on('jpeg_quality', [$this, 'setJpegQuality']);
 
-    if ($settings['disabled']) {
+    if (Types::getSafeBool($settings['disabled'])) {
       $this->disableImageProcessing();
 
       return;
@@ -207,32 +222,34 @@ class Images {
 
     $settings = $settings['settings'];
 
-    if ($settings['disable_image_sizes']) {
+    if (Types::getSafeBool($settings['disable_image_sizes'] ?? false)) {
       Filters::on('intermediate_image_sizes_advanced', [$this, 'disableImageSizes']);
       Filters::on('big_image_size_threshold', '__return_false');
     }
 
-    if ($settings['disable_other_image_sizes']) {
+    if (Types::getSafeBool($settings['disable_other_image_sizes'] ?? false)) {
       Events::on('init', [$this, 'disableOtherImageSizes']);
     }
 
-    if ($settings['disable_image_editing']) {
+    if (Types::getSafeBool($settings['disable_image_editing'] ?? false)) {
       Filters::on('wp_image_editors', [$this, 'disableImageEditing']);
     }
 
-    if ($settings['remove_default_image_sizes']) {
+    if (Types::getSafeBool($settings['remove_default_image_sizes'] ?? false)) {
       Filters::on('intermediate_image_sizes_advanced', [$this, 'removeDefaultImageSizes']);
     }
 
-    if ($settings['disable_responsive_images']) {
+    if (Types::getSafeBool($settings['disable_responsive_images'] ?? false)) {
       Filters::on('max_srcset_image_width', [$this, 'disableResponsiveImages']);
     }
 
-    if ($settings['prevent_image_resizes_on_upload']) {
+    if (Types::getSafeBool($settings['prevent_image_resizes_on_upload'] ?? false)) {
       Filters::on('wp_generate_attachment_metadata', [$this, 'preventImageResizesOnUpload'], 10, 1);
     }
 
-    if (!empty($settings['custom_sizes'])) {
+    $customSizes = $settings['custom_sizes'] ?? [];
+
+    if (is_array($customSizes) && $customSizes !== []) {
       Events::on('after_setup_theme', [$this, 'addCustomImageSizes']);
       Filters::on('image_size_names_choose', [$this, 'addCustomImageSizesToEditor']);
     }
@@ -247,7 +264,7 @@ class Images {
    */
   protected function normalizeConfig(array $config): array {
     // If disabled is true, apply all disable settings
-    if (!empty($config['disabled']) && $config['disabled'] === true) {
+    if (($config['disabled'] ?? null) === true) {
       return [
         'disabled' => true,
         'settings' => array_merge(self::DEFAULT_SETTINGS, [
@@ -262,9 +279,13 @@ class Images {
     }
 
     // Merge with defaults while preserving custom settings
+    $settings = $config['settings'] ?? [];
+    $settings = is_array($settings) ? $settings : [];
+    /** @var array<string, mixed> $settings */
+
     return [
       'disabled' => $config['disabled'] ?? false,
-      'settings' => array_merge(self::DEFAULT_SETTINGS, $config['settings'] ?? []),
+      'settings' => array_merge(self::DEFAULT_SETTINGS, $settings),
     ];
   }
 
@@ -306,9 +327,9 @@ class Images {
     }
 
     // Validate custom sizes
-    if (isset($settings['custom_sizes'])) {
+    if (isset($settings['custom_sizes']) && is_array($settings['custom_sizes'])) {
       foreach ($settings['custom_sizes'] as $name => $size) {
-        if (!isset($size['width'], $size['height'])) {
+        if (!is_array($size) || !isset($size['width'], $size['height'])) {
           throw new InvalidArgumentException("Invalid custom size configuration for '{$name}', both width and height must be set.");
         }
 
@@ -341,7 +362,9 @@ class Images {
    * This method adds actions and filters to set up custom image sizes if they are defined in the configuration.
    */
   protected function setupCustomImageSizes(): void {
-    if (!empty($this->config['settings']['custom_sizes'])) {
+    $customSizes = $this->config['settings']['custom_sizes'] ?? [];
+
+    if (is_array($customSizes) && $customSizes !== []) {
       Events::on('after_setup_theme', [$this, 'addCustomImageSizes']);
       Filters::on('image_size_names_choose', [$this, 'addCustomImageSizesToEditor']);
     }

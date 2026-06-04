@@ -14,6 +14,8 @@ class Context extends Singleton {
   public array $context;
 
   public function __construct() {
+    parent::__construct();
+
     $this->context = [];
   }
 
@@ -21,7 +23,14 @@ class Context extends Singleton {
    * Boot the context singleton.
    */
   public static function boot(): void {
-    self::getInstance()->set(Filters::apply('fern:core:ctx', []));
+    $ctx = Filters::apply('fern:core:ctx', []);
+
+    if (!is_array($ctx)) {
+      $ctx = [];
+    }
+
+    /** @var array<string, mixed> $ctx */
+    self::set($ctx);
   }
 
   /**

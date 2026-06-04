@@ -83,6 +83,8 @@ class Vanilla implements RenderingEngine {
     extract($data, EXTR_SKIP);
     include $path;
 
-    return ob_get_clean() ?: '';
+    $output = ob_get_clean();
+
+    return $output === false ? '' : $output;
   }
 }

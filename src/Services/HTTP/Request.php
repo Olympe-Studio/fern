@@ -7,13 +7,14 @@ namespace Fern\Core\Services\HTTP;
 use Fern\Core\Factory\Singleton;
 use Fern\Core\Services\Actions\Action;
 use Fern\Core\Utils\JSON;
+use Fern\Core\Utils\Types;
 use Fern\Core\Wordpress\Filters;
 
 /**
  * @phpstan-type HttpMethod 'GET'|'POST'|'PUT'|'DELETE'|'PATCH'|'HEAD'|'OPTIONS'
  * @phpstan-type HttpHeader string
  * @phpstan-type HttpHeaders array<string, HttpHeader>
- * @phpstan-type QueryParams array<string, string|array<string>>
+ * @phpstan-type QueryParams array<string, mixed>
  * @phpstan-type UploadedFile array{
  *   name: string,
  *   type: string,
@@ -33,9 +34,9 @@ class Request extends Singleton {
   private int $id;
 
   /**
-   * Holds the parsed request payload. Initialized to null to avoid accessing an uninitialised typed property when the request does not contain a body.
+   * Holds the parsed request payload. Initialized to an empty string to avoid accessing an uninitialised typed property when the request does not contain a body.
    *
-   * @var RequestBody|null
+   * @var RequestBody
    */
   private mixed $body = '';
 
@@ -105,16 +106,29 @@ class Request extends Singleton {
   private ?bool $isArchive = null;
 
   public function __construct() {
+    parent::__construct();
+
     $this->id = $this->getCurrentId();
-    $this->contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+    $this->contentType = Types::getSafeString($_SERVER['CONTENT_TYPE'] ?? '');
+
     $headers = function_exists('getallheaders') ? getallheaders() : [];
     unset($headers['Cookie']);
+    /** @var array<string, string> $headers */
     $this->headers = $headers;
+
     $this->files = null;
-    $this->method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-    $this->requestedUri = $_SERVER['REQUEST_URI'] ?? '';
-    $this->userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
-    $this->cookies = $_COOKIE;
+
+    /** @var HttpMethod $method */
+    $method = strtoupper(Types::getSafeString($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+    $this->method = $method;
+
+    $this->requestedUri = Types::getSafeString($_SERVER['REQUEST_URI'] ?? '');
+    $this->userAgent = Types::getSafeString($_SERVER['HTTP_USER_AGENT'] ?? '');
+
+    /** @var array<string, string> $cookies */
+    $cookies = $_COOKIE;
+    $this->cookies = $cookies;
+
     $this->url = \untrailingslashit(\get_home_url()) . $this->requestedUri;
     $this->query = $this->parseUrlParams();
 
@@ -156,16 +170,19 @@ class Request extends Singleton {
   public function getCurrentId(): int {
     $id = $this->isTerm() ? \get_queried_object_id() : \get_the_ID();
 
-    if (!$id) {
+    if ($id === false || $id === 0) {
       $queriedObject = $this->getQueriedObject();
-      $id = $queriedObject->ID ?? false;
+      $objectVars = is_object($queriedObject) ? get_object_vars($queriedObject) : [];
+      $id = $objectVars['ID'] ?? false;
     }
 
-    if (!$id) {
+    $resolvedId = Types::getSafeInt($id);
+
+    if ($resolvedId === 0) {
       return -1;
     }
 
-    return Filters::apply('fern:core:http:request:queried_object_id', (int) $id);
+    return Types::getSafeInt(Filters::apply('fern:core:http:request:queried_object_id', $resolvedId));
   }
 
   /**
@@ -229,7 +246,7 @@ class Request extends Singleton {
    * Checks the country from which the request have been made.
    */
   public function getCountryFrom(): ?string {
-    $acceptLanguage = $_SERVER['HTTP_ACCEPT_LANGUAGE'];
+    $acceptLanguage = Types::getSafeString($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '');
     preg_match('/^[a-z]{2}-([A-Z]{2})/', $acceptLanguage, $matches);
 
     return $matches[1] ?? null;
@@ -352,8 +369,14 @@ class Request extends Singleton {
    */
   public function set404(): never {
     global $wp_query;
-    $wp_query->query = $wp_query->queried_object = $wp_query->queried_object_id = null;
-    $wp_query->set_404();
+
+    if ($wp_query instanceof \WP_Query) {
+      $wp_query->query = [];
+      $wp_query->queried_object = null;
+      $wp_query->queried_object_id = 0;
+      $wp_query->set_404();
+    }
+
     status_header(404);
     header('Location:' . trailingslashit(get_home_url()) . '404-not-found');
     nocache_headers();
@@ -447,7 +470,7 @@ class Request extends Singleton {
    * return bool
    */
   public function isSideRequest(): bool {
-    return $this->isAjax() || $this->isRest() || $this->isCron() || $this->isCLI();
+    return $this->isAjax() || $this->isREST() || $this->isCRON() || $this->isCLI();
   }
 
   /**
@@ -560,7 +583,9 @@ class Request extends Singleton {
 
     if ($this->isTerm()) {
       $queriedObject = $this->getQueriedObject();
-      $this->taxonomy = $queriedObject->taxonomy ?? null;
+      $objectVars = is_object($queriedObject) ? get_object_vars($queriedObject) : [];
+      $taxonomy = $objectVars['taxonomy'] ?? null;
+      $this->taxonomy = is_string($taxonomy) ? $taxonomy : null;
       return $this->taxonomy;
     }
 
@@ -578,12 +603,14 @@ class Request extends Singleton {
     }
 
     if (\is_singular()) {
-      $this->postType = \get_post_type() ?: null;
+      $postType = \get_post_type();
+      $this->postType = $postType === false ? null : $postType;
       return $this->postType;
     }
 
     if (\is_post_type_archive()) {
-      $this->postType = \get_query_var('post_type') ?: null;
+      $postType = \get_query_var('post_type');
+      $this->postType = is_string($postType) && $postType !== '' ? $postType : null;
       return $this->postType;
     }
 
@@ -648,8 +675,9 @@ class Request extends Singleton {
 
     $termId = null;
 
-    if (!is_null($queriedObject)) {
-      $termId = $queriedObject->term_id ?? null;
+    if (is_object($queriedObject)) {
+      $objectVars = get_object_vars($queriedObject);
+      $termId = $objectVars['term_id'] ?? null;
     }
 
     return !is_null($termId);
@@ -789,7 +817,7 @@ class Request extends Singleton {
    * Parse the incomming request body and sets its content type.
    */
   private function parseBody(): void {
-    if (empty($this->contentType)) {
+    if ($this->contentType === '') {
       $this->body = [];
 
       return;
@@ -797,20 +825,28 @@ class Request extends Singleton {
 
     // handles FormData javascript Objects.
     if (str_contains($this->contentType, 'multipart/form-data')) {
-      $this->setFiles($_FILES);
-      $this->setBody($_POST);
+      /** @var UploadedFiles $files */
+      $files = $_FILES;
+      $this->setFiles($files);
+
+      /** @var array<string, mixed> $post */
+      $post = $_POST;
+      $this->setBody($post);
 
       return;
     }
 
     $input = file_get_contents('php://input');
 
-    if (!$input) {
+    if ($input === false || $input === '') {
       return;
     }
 
     if (str_contains($this->contentType, 'application/json')) {
-      $this->body = JSON::decode($input, true) ?: [];
+      $decoded = JSON::decode($input, true);
+      /** @var array<string, mixed> $body */
+      $body = is_array($decoded) ? $decoded : [];
+      $this->body = $body;
 
       return;
     }
@@ -831,7 +867,10 @@ class Request extends Singleton {
    * @return QueryParams The array of parsed URL parameters.
    */
   private function parseUrlParams(): array {
-    return $_GET;
+    /** @var array<string, mixed> $params */
+    $params = $_GET;
+
+    return $params;
   }
 
   /**

@@ -28,10 +28,11 @@ class Utils {
         : new ReflectionFunction($callable);
     }
 
-    if (!is_array($callable) || count($callable) !== 2) {
+    if (!is_array($callable)) {
       $callable = [$callable, '__invoke'];
     }
 
+    /** @var array{class-string|object, non-falsy-string} $callable */
     return new ReflectionMethod($callable[0], $callable[1]);
   }
 

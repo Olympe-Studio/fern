@@ -14,7 +14,9 @@ class RankMath implements SEOIntegration {
       do_action('rank_math/head');
       remove_all_actions('rank_math/head');
 
-      return ob_get_clean() ?: '';
+      $head = ob_get_clean();
+
+      return $head === false ? '' : $head;
     }
 
     return '';

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Fern\Core\Services\SEO\Integrations;
 
 use Fern\Core\Services\SEO\SEOIntegration;
+use Fern\Core\Utils\Types;
 
 class TheSeoFramework implements SEOIntegration {
   /**
@@ -15,10 +16,15 @@ class TheSeoFramework implements SEOIntegration {
       ob_start();
       $tsf = tsf();
       // title is not included in the meta tags
-      echo '<title>' . html_entity_decode(\The_SEO_Framework\Front\Title::set_document_title(), ENT_QUOTES | ENT_HTML5, 'UTF-8') . '</title>';
-      $tsf->print_seo_meta_tags();
+      echo '<title>' . html_entity_decode(Types::getSafeString(\The_SEO_Framework\Front\Title::set_document_title()), ENT_QUOTES | ENT_HTML5, 'UTF-8') . '</title>';
 
-      return ob_get_clean() ?: '';
+      if (is_object($tsf) && method_exists($tsf, 'print_seo_meta_tags')) {
+        $tsf->print_seo_meta_tags();
+      }
+
+      $head = ob_get_clean();
+
+      return $head === false ? '' : $head;
     }
 
     return '';
