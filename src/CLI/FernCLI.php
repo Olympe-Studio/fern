@@ -18,6 +18,10 @@ class FernCLI {
       throw new RuntimeException('WP CLI is not available.');
     }
 
+    // @codeCoverageIgnoreStart
+    // Reached only under WP-CLI; defining WP_CLI here would break the
+    // constant-gated Request predicates exercised elsewhere in the suite.
     return new self();
+    // @codeCoverageIgnoreEnd
   }
 }

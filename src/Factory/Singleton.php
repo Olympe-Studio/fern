@@ -12,6 +12,9 @@ abstract class Singleton {
 
   /**
    * Avoid clone instance
+   *
+   * @codeCoverageIgnore The private visibility blocks cloning at the call site,
+   * so this body is never executed.
    */
   private function __clone() {}
 
@@ -31,5 +34,14 @@ abstract class Singleton {
     $calledClass = static::class;
 
     return self::$_instances[$calledClass] ??= new $calledClass(...$args);
+  }
+
+  /**
+   * Clears every resolved singleton instance.
+   *
+   * Intended for test isolation so each test starts from a clean container.
+   */
+  public static function flushInstances(): void {
+    self::$_instances = [];
   }
 }

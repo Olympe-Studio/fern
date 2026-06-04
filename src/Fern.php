@@ -21,7 +21,7 @@ use Fern\Core\Wordpress\Events;
  * @phpstan-type ConfigValue array<string, mixed>|mixed
  */
 class Fern extends Singleton {
-  const VERSION = '0.1.0';
+  const VERSION = '2.0.0';
 
   /**
    * @var bool|null Cache for development environment status
@@ -84,6 +84,10 @@ class Fern extends Singleton {
    * Defines fern configuration and boot the application
    *
    * @param array<string, ConfigValue> $config
+   *
+   * @codeCoverageIgnore Top-level bootstrap: it boots every service and requires
+   * the host App; the constituent steps are unit-tested in isolation, the
+   * end-to-end boot is integration territory.
    */
   public static function defineConfig(array $config): void {
     /**
@@ -112,7 +116,12 @@ class Fern extends Singleton {
   }
 
   /**
-   * Boot the application
+   * Boot the application.
+   *
+   * Top-level wiring only: each constituent `*::boot()` is unit-tested in
+   * isolation, but the end-to-end boot sequence is integration territory.
+   *
+   * @codeCoverageIgnore
    */
   private static function boot(): void {
     I18N::boot();

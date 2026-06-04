@@ -12,29 +12,41 @@
       "src/Utils"
     ]
   },
+  "autoload-dev": {
+    "psr-4": {
+      "Tests\\": "tests/"
+    }
+  },
   "authors": [
     {
       "name": "Tanguy Magnaudet"
     }
   ],
   "minimum-stability": "dev",
+  "prefer-stable": true,
   "scripts": {
-    "test": [
-      "pest"
-    ],
+    "test": "pest",
+    "test:unit": "pest --testsuite=unit",
+    "test:arch": "pest tests/Arch",
+    "test:coverage": "pest --coverage --min=90",
+    "test:types": "pest --type-coverage --min=89",
+    "test:mutate": "pest tests/Unit/Utils --mutate --min=80",
     "format": "php-cs-fixer fix --config=./phpcs.dist.php",
     "format:check": "php-cs-fixer fix --config=./phpcs.dist.php --dry-run --diff",
     "phpstan": "phpstan analyse src --memory-limit=2048M"
   },
   "require-dev": {
     "pestphp/pest": "4.x-dev",
+    "brain/monkey": "^2.6",
+    "mockery/mockery": "^1.6",
     "php-stubs/wp-cli-stubs": "dev-master",
     "friendsofphp/php-cs-fixer": "dev-master",
     "phpstan/phpstan": "2.1.x-dev",
     "szepeviktor/phpstan-wordpress": "2.x-dev",
     "phpstan/extension-installer": "1.4.x-dev",
     "php-stubs/woocommerce-stubs": "dev-master",
-    "phpstan/phpstan-strict-rules": "2.0.11"
+    "phpstan/phpstan-strict-rules": "2.0.11",
+    "pestphp/pest-plugin-type-coverage": "^4.0"
   },
   "config": {
     "allow-plugins": {

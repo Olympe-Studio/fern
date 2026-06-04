@@ -195,9 +195,8 @@ class Cache extends Singleton {
    */
   public static function save(): void {
     $cache = self::getInstance();
-    $isDirty = $cache->isDirty();
 
-    if (!$isDirty) {
+    if (!$cache->isDirty()) {
       return;
     }
 
@@ -206,22 +205,17 @@ class Cache extends Singleton {
     // Maybe we flushed the cache?
     if ($persistentCache === []) {
       delete_option(self::PERSISTENT_CACHE_OPTION);
+      $cache->setDirtyState(false);
 
       return;
     }
 
     $cleanPersistentCache = $cache->removeExpiredItems($persistentCache);
 
-    if (count($cleanPersistentCache) === count($persistentCache)) {
-      $isDirty = false;
-    }
-
-    if ($isDirty) {
-      update_option(self::PERSISTENT_CACHE_OPTION, $cleanPersistentCache, true);
-    }
-
     if ($cleanPersistentCache === []) {
       delete_option(self::PERSISTENT_CACHE_OPTION);
+    } else {
+      update_option(self::PERSISTENT_CACHE_OPTION, $cleanPersistentCache, true);
     }
 
     $cache->setDirtyState(false);

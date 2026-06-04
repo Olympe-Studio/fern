@@ -6,7 +6,6 @@ use Fern\Core\Errors\FileHandlingError;
 use Fern\Core\Fern;
 use Fern\Core\Utils\Types;
 use Fern\Core\Wordpress\Filters;
-use Fern\Services\HTTP\FileConstants;
 use InvalidArgumentException;
 
 /**
@@ -423,22 +422,19 @@ class File {
       throw new FileHandlingError('Failed to initialize fileinfo');
     }
 
-    try {
-      $actualMime = finfo_file($finfo, $this->tmp_name);
-      /**
-       * Filter the list of allowed MIME types.
-       *
-       * @filter fern:core:file:allowed_mime_types
-       *
-       * @return array<string>
-       */
-      $allowedMimeTypes = Filters::apply('fern:core:file:allowed_mime_types', FileConstants::ALLOWED_MIME_TYPES);
-      $allowedMimeTypes = is_array($allowedMimeTypes) ? $allowedMimeTypes : [];
+    $actualMime = finfo_file($finfo, $this->tmp_name);
 
-      return in_array($actualMime, $allowedMimeTypes, true);
-    } finally {
-      finfo_close($finfo);
-    }
+    /**
+     * Filter the list of allowed MIME types.
+     *
+     * @filter fern:core:file:allowed_mime_types
+     *
+     * @return array<string>
+     */
+    $allowedMimeTypes = Filters::apply('fern:core:file:allowed_mime_types', FileConstants::ALLOWED_MIME_TYPES);
+    $allowedMimeTypes = is_array($allowedMimeTypes) ? $allowedMimeTypes : [];
+
+    return in_array($actualMime, $allowedMimeTypes, true);
   }
 
   /**

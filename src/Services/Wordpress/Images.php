@@ -348,12 +348,11 @@ class Images {
   protected function disableImageProcessing(): void {
     Filters::on('intermediate_image_sizes_advanced', [$this, 'disableImageSizes']);
     Filters::on('big_image_size_threshold', '__return_false');
-    Filters::on('init', [$this, 'disableOtherImageSizes']);
+    Events::on('init', [$this, 'disableOtherImageSizes']);
     Filters::on('wp_image_editors', [$this, 'disableImageEditing']);
     Filters::on('intermediate_image_sizes_advanced', [$this, 'removeDefaultImageSizes']);
-    Filters::on('jpeg_quality', [$this, 'setJpegQuality']);
     Filters::on('max_srcset_image_width', [$this, 'disableResponsiveImages']);
-    Filters::on('wp_generate_attachment_metadata', [$this, 'preventImageResizesOnUpload'], 10, 2);
+    Filters::on('wp_generate_attachment_metadata', [$this, 'preventImageResizesOnUpload'], 10, 1);
   }
 
   /**

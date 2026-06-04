@@ -123,7 +123,7 @@ class Reply {
 
     $this->applyHeaders();
     wp_safe_redirect($to, $this->status);
-    exit;
+    $this->terminate();
   }
 
   /**
@@ -480,6 +480,18 @@ class Reply {
       }
     }
 
+    $this->terminate();
+  }
+
+  /**
+   * Terminates the current request lifecycle.
+   *
+   * Isolated behind a method so tests can intercept it instead of exiting the
+   * whole process.
+   *
+   * @codeCoverageIgnore
+   */
+  protected function terminate(): never {
     exit;
   }
 
@@ -530,21 +542,17 @@ class Reply {
    * Apply the headers of the current Reply.
    */
   private function applyHeaders(): void {
-    // Apply regular headers first
+    // Trailers require chunked transfer encoding; keep it on the instance so the
+    // send() chunked check and applyTrailers() both see a consistent state.
+    if ($this->trailers !== []) {
+      $this->setHeader('Transfer-Encoding', 'chunked');
+    }
+
     foreach ($this->headers as $name => $value) {
       header("{$name}: " . Types::getSafeString($value));
     }
 
-    // Handle chunked transfer encoding if trailers are present
     if ($this->trailers !== []) {
-      $this->removeHeader('Transfer-Encoding');
-      header('Transfer-Encoding: chunked');
-
-      // Content-Encoding should not be set to 'chunked'
-      // Remove this line: $this->removeHeader('Content-Encoding');
-      // Remove this line: header('Content-Encoding: chunked');
-
-      // Declare trailers
       foreach ($this->trailers as $name => $value) {
         header("Trailer: {$name}");
       }

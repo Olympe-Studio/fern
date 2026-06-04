@@ -3,14 +3,21 @@ parameters:
   paths:
     - src/
 
+  # Type coverage is tracked separately via `pest --type-coverage`; the PHPStan
+  # extension ships enabled through extension-installer, so neutralise its
+  # thresholds here to keep `composer phpstan` focused on static analysis.
+  type_coverage:
+    return_type: 0
+    param_type: 0
+    property_type: 0
+    constant_type: 0
+
   bootstrapFiles:
     - vendor/php-stubs/woocommerce-stubs/woocommerce-stubs.php
 
   ignoreErrors:
     # WP-CLI specific ignores
     - '#Call to static method .* on an unknown class WP_CLI#'
-    # Missing deps
-    - '#Call to static method is_module_active\(\) on an unknown class Fern\\Core\\Services\\SEO\\Jetpack#'
     # False positives
     - '#Parameter .* expects list<.*>, array<.*> given\.#'
     # WP_DEBUG_LOG can be a string path at runtime, but php-stubs models it as bool-only.
