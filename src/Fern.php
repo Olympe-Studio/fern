@@ -21,7 +21,7 @@ use Fern\Core\Wordpress\Events;
  * @phpstan-type ConfigValue array<string, mixed>|mixed
  */
 class Fern extends Singleton {
-  const VERSION = '2.0.0';
+  const VERSION = '2.0.2';
 
   /**
    * @var bool|null Cache for development environment status
