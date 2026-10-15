@@ -59,9 +59,22 @@ function captureSend(Reply $reply): array {
 
 beforeEach(function (): void {
   Functions\when('get_option')->justReturn('UTF-8');
+  Functions\when('status_header')->justReturn();
 });
 
 describe('send', function (): void {
+  it('sets the status through status_header so the status line WordPress already set is replaced', function (): void {
+    bindRequest(false);
+    $sent = null;
+    Functions\when('status_header')->alias(static function (int $code) use (&$sent): void {
+      $sent = $code;
+    });
+
+    captureSend(new TerminatingReply(404, '<p>Not found</p>', 'text/html'));
+
+    expect($sent)->toBe(404);
+  });
+
   it('echoes the JSON-encoded content for an array body', function (): void {
     bindRequest(false);
     $reply = new TerminatingReply(200, ['ok' => true]);
@@ -150,6 +163,62 @@ describe('send', function (): void {
 
     expect($result['output'])->toBe('')
       ->and($result['terminated'])->toBeFalse();
+  });
+
+  it('overrides the body with the data passed to send()', function (): void {
+    bindRequest(false);
+    $reply = new TerminatingReply(200, '<p>old</p>', 'text/html');
+
+    $terminated = false;
+    ob_start();
+
+    try {
+      $reply->send('<p>new</p>');
+    } catch (RuntimeException $e) {
+      $terminated = $e->getMessage() === 'terminated';
+    }
+
+    $output = ob_get_clean();
+
+    expect($output)->toBe('<p>new</p>')
+      ->and($terminated)->toBeTrue()
+      ->and($reply->getBody())->toBe('<p>new</p>');
+  });
+
+  it('coerces an empty-string json body to an empty array before sending', function (): void {
+    bindRequest(false);
+    $reply = new TerminatingReply(200, '', 'application/json');
+
+    $result = captureSend($reply);
+
+    expect($result['output'])->toBe('[]')
+      ->and($result['terminated'])->toBeTrue()
+      ->and($reply->getBody())->toBe([]);
+  });
+
+  it('finishes the FastCGI request on the action exit path', function (): void {
+    bindRequest(true);
+    Functions\when('fastcgi_finish_request')->justReturn(null);
+    $reply = new TerminatingReply(200, ['ok' => true]);
+
+    $result = captureSend($reply);
+
+    expect(function_exists('fastcgi_finish_request'))->toBeTrue()
+      ->and($result['terminated'])->toBeTrue();
+  });
+});
+
+describe('applyTrailers', function (): void {
+  it('rejects trailers when the transfer encoding is not chunked', function (): void {
+    $reply = new Reply(200, 'body', 'text/html');
+    $reply->addTrailer('X-Sum', 'abc');
+    $reply->setHeader('Transfer-Encoding', 'identity');
+
+    $method = new ReflectionMethod(Reply::class, 'applyTrailers');
+
+    expect(static function () use ($method, $reply): void {
+      $method->invoke($reply);
+    })->toThrow(RuntimeException::class, 'Trailers can only be sent with chunked Transfer-Encoding');
   });
 });
 

@@ -537,7 +537,11 @@ trait WooCartActions {
       $cart = $this->getCart();
 
       if (!$cart instanceof WC_Cart) {
+        // @codeCoverageIgnoreStart
+        // Defensive: getCart() is typed `: WC_Cart` and throws otherwise, so a
+        // non-cart value here is unreachable through the public API.
         return $this->getEmptyCartData();
+        // @codeCoverageIgnoreEnd
       }
 
       // Items will be sorted later in formatCartItems
@@ -818,6 +822,10 @@ trait WooCartActions {
    * @throws Exception When WooCommerce is not installed
    */
   private function getCart(): WC_Cart {
+    // @codeCoverageIgnoreStart
+    // Defensive "WooCommerce inactive" guards: unreachable in the test suite —
+    // Mockery permanently defines \WC_Cart and Brain Monkey permanently defines
+    // WC() once any test stubs them, and PHP cannot undefine either.
     if (!class_exists('\WC_Cart')) {
       throw new Exception('WooCommerce is not installed');
     }
@@ -825,6 +833,7 @@ trait WooCartActions {
     if (!function_exists('WC')) {
       throw new Exception('WooCommerce function WC() not found');
     }
+    // @codeCoverageIgnoreEnd
 
     $wc = WC();
 

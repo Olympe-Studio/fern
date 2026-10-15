@@ -29,6 +29,45 @@ class WooFakeRequest extends Request {
   }
 }
 
+/**
+ * Minimal WooCommerce coupon/discount doubles so validateCoupon() can exercise
+ * its real branches without a live WooCommerce.
+ */
+if (!class_exists('WC_Coupon')) {
+  class WC_Coupon {
+    public function __construct(public string $code = '') {}
+  }
+}
+
+if (!class_exists('WC_Discounts')) {
+  /**
+   * WC_Discounts::$nextResult drives is_coupon_valid(): a bool, a WP_Error, or a
+   * Throwable (which is rethrown to reach validateCoupon()'s catch path).
+   */
+  class WC_Discounts {
+    /** @var mixed */
+    public static $nextResult = true;
+
+    public function __construct(mixed $cart) {}
+
+    public function is_coupon_valid(mixed $coupon): mixed {
+      if (self::$nextResult instanceof Throwable) {
+        throw self::$nextResult;
+      }
+
+      return self::$nextResult;
+    }
+  }
+}
+
+/**
+ * Interface exposing set_session so a Mockery cart can report it through
+ * method_exists() (Mockery only defines real methods for declared members).
+ */
+interface WooCartWithSession {
+  public function set_session(): void;
+}
+
 function cartHost(): CartActionsHost {
   return new CartActionsHost();
 }
@@ -99,8 +138,34 @@ function emptyCalculableCart(): Mockery\MockInterface {
   return $cart;
 }
 
+/**
+ * Like emptyCalculableCart() but pre-loaded with the given contents so
+ * position and reposition bookkeeping has real keys to work with.
+ *
+ * @param array<string, mixed> $contents
+ */
+function calculableCartWith(array $contents): Mockery\MockInterface {
+  priceFuncStubs();
+
+  $cart = makeCart();
+  $cart->cart_contents = $contents;
+  $cart->shouldReceive('get_cart')->andReturn($contents);
+  $cart->shouldReceive('calculate_shipping');
+  $cart->shouldReceive('calculate_fees');
+  $cart->shouldReceive('calculate_totals');
+  $cart->shouldReceive('get_subtotal')->andReturn(0.0);
+  $cart->shouldReceive('get_total')->andReturn(0.0);
+  $cart->shouldReceive('get_cart_contents_count')->andReturn(0);
+  $cart->shouldReceive('get_total_tax')->andReturn(0.0);
+  $cart->shouldReceive('needs_shipping')->andReturn(false);
+  $cart->shouldReceive('get_shipping_total')->andReturn(0.0);
+
+  return $cart;
+}
+
 afterEach(function (): void {
   (new ReflectionProperty(\Fern\Core\Services\Woo\Woocommerce::class, 'config'))->setValue(null, []);
+  WC_Discounts::$nextResult = true;
 });
 
 describe('calculateSaleAmount', function (): void {
@@ -209,6 +274,17 @@ describe('ensureCartPositions', function (): void {
     invokeHost(cartHost(), 'ensureCartPositions', $cart);
 
     expect($cart->cart_contents)->toBe([]);
+  });
+
+  it('persists positions through set_session when the cart supports it', function (): void {
+    $cart = Mockery::mock('WC_Cart, ' . WooCartWithSession::class);
+    $cart->cart_contents = [];
+    $cart->shouldReceive('get_cart')->andReturn(['a' => []]);
+    $cart->shouldReceive('set_session')->once();
+
+    invokeHost(cartHost(), 'ensureCartPositions', $cart);
+
+    expect($cart->cart_contents['a']['position'])->toBe(1.0);
   });
 });
 
@@ -412,6 +488,48 @@ describe('addToCart', function (): void {
     expect($reply->getBody()['success'])->toBeFalse()
       ->and($reply->getBody()['message'])->toBe('Failed to add variation to cart');
   });
+
+  it('replies 400 when the referenced cart item is missing', function (): void {
+    $cart = emptyCalculableCart();
+    $cart->shouldReceive('get_cart_item')->with('gone')->andReturn(false);
+    stubWcWithCart($cart);
+
+    $product = Mockery::mock('WC_Product');
+    $product->shouldReceive('is_type')->andReturn(false);
+    Functions\when('wc_get_product')->justReturn($product);
+
+    $reply = cartHost()->addToCart(wooMakeRequest([
+      'product_id' => 42,
+      'cart_item_key' => 'gone',
+    ]));
+
+    expect($reply->getBody()['success'])->toBeFalse()
+      ->and($reply->getBody()['message'])->toBe('Cart item not found');
+  });
+
+  it('modifies an existing line and preserves its position', function (): void {
+    $cart = calculableCartWith(['abc' => ['position' => 2.0]]);
+    $cart->shouldReceive('get_cart_item')->with('abc')->andReturn(['position' => 2.0]);
+    $cart->shouldReceive('remove_cart_item')->with('abc');
+    $cart->shouldReceive('add_to_cart')->andReturn('newkey');
+    stubWcWithCart($cart);
+
+    $product = Mockery::mock('WC_Product');
+    $product->shouldReceive('is_type')->andReturn(false);
+    Functions\when('wc_get_product')->justReturn($product);
+
+    $reply = cartHost()->addToCart(wooMakeRequest([
+      'product_id' => 42,
+      'quantity' => 1,
+      'cart_item_key' => 'abc',
+    ]));
+    $body = $reply->getBody();
+
+    expect($body['success'])->toBeTrue()
+      ->and($body['message'])->toBe('Cart item modified')
+      ->and($body['cart_item_key'])->toBe('newkey')
+      ->and($cart->cart_contents['newkey']['position'])->toBe(2.0);
+  });
 });
 
 describe('batchAddToCart', function (): void {
@@ -444,6 +562,45 @@ describe('batchAddToCart', function (): void {
       ->and($body['results'][1]['message'])->toBe('Invalid product ID')
       ->and($body['message'])->toBe('1 of 2 items added to cart');
   });
+
+  it('replies 400 when the cart cannot be resolved', function (): void {
+    $wc = Mockery::mock('WooCommerce');
+    $wc->cart = null;
+    Functions\when('WC')->justReturn($wc);
+
+    $reply = cartHost()->batchAddToCart(wooMakeRequest(['items' => [['product_id' => 1]]]));
+
+    expect($reply->getBody()['success'])->toBeFalse()
+      ->and($reply->getBody()['message'])->toBe('Invalid WooCommerce cart instance');
+  });
+
+  it('reports product-not-found for a missing product', function (): void {
+    stubWcWithCart(emptyCalculableCart());
+    Functions\when('wc_get_product')->justReturn(false);
+
+    $reply = cartHost()->batchAddToCart(wooMakeRequest(['items' => [['product_id' => 7]]]));
+    $body = $reply->getBody();
+
+    expect($body['success'])->toBeFalse()
+      ->and($body['results'][0]['success'])->toBeFalse()
+      ->and($body['results'][0]['message'])->toBe('Product not found');
+  });
+
+  it('reports an add failure for a variable product', function (): void {
+    $cart = emptyCalculableCart();
+    $cart->shouldReceive('add_to_cart')->andReturn(false);
+    stubWcWithCart($cart);
+
+    $product = Mockery::mock('WC_Product');
+    $product->shouldReceive('is_type')->with('variable')->andReturn(true);
+    Functions\when('wc_get_product')->justReturn($product);
+
+    $reply = cartHost()->batchAddToCart(wooMakeRequest(['items' => [['product_id' => 8]]]));
+    $body = $reply->getBody();
+
+    expect($body['results'][0]['success'])->toBeFalse()
+      ->and($body['results'][0]['message'])->toBe('Failed to add variation to cart');
+  });
 });
 
 describe('removeFromCart', function (): void {
@@ -474,6 +631,17 @@ describe('removeFromCart', function (): void {
 
     expect($reply->getBody()['success'])->toBeFalse()
       ->and($reply->getBody()['message'])->toBe('Failed to remove item from cart');
+  });
+
+  it('replies 400 when the cart cannot be resolved', function (): void {
+    $wc = Mockery::mock('WooCommerce');
+    $wc->cart = null;
+    Functions\when('WC')->justReturn($wc);
+
+    $reply = cartHost()->removeFromCart(wooMakeRequest(['cart_item_key' => 'abc']));
+
+    expect($reply->getBody()['success'])->toBeFalse()
+      ->and($reply->getBody()['message'])->toBe('Invalid WooCommerce cart instance');
   });
 });
 
@@ -519,6 +687,35 @@ describe('updateCartItemQuantity', function (): void {
 
     expect($reply->getBody()['success'])->toBeFalse()
       ->and($reply->getBody()['message'])->toBe('Failed to update cart item quantity');
+  });
+
+  it('repositions the line when its previous index is known', function (): void {
+    $cart = calculableCartWith(['abc' => ['position' => 1.0]]);
+    $cart->shouldReceive('get_cart_item')->with('abc')->andReturn(['position' => 1.0]);
+    $cart->shouldReceive('set_quantity')->with('abc', 3)->andReturn(true);
+    stubWcWithCart($cart);
+
+    $reply = cartHost()->updateCartItemQuantity(wooMakeRequest([
+      'cart_item_key' => 'abc',
+      'quantity' => 3,
+    ]));
+
+    expect($reply->getBody()['success'])->toBeTrue()
+      ->and($reply->getBody()['message'])->toBe('Cart item quantity updated');
+  });
+
+  it('replies 400 when the cart cannot be resolved', function (): void {
+    $wc = Mockery::mock('WooCommerce');
+    $wc->cart = null;
+    Functions\when('WC')->justReturn($wc);
+
+    $reply = cartHost()->updateCartItemQuantity(wooMakeRequest([
+      'cart_item_key' => 'abc',
+      'quantity' => 3,
+    ]));
+
+    expect($reply->getBody()['success'])->toBeFalse()
+      ->and($reply->getBody()['message'])->toBe('Invalid WooCommerce cart instance');
   });
 });
 
@@ -571,6 +768,46 @@ describe('updateCartItem', function (): void {
     expect($body['success'])->toBeTrue()
       ->and($body['cart_item_key'])->toBe('newkey')
       ->and($cart->cart_contents['newkey']['position'])->toBe(2.0);
+  });
+
+  it('assigns an index-based position when the line had none', function (): void {
+    $cart = calculableCartWith(['abc' => ['quantity' => 1]]);
+    $cart->shouldReceive('get_cart_item')->with('abc')->andReturn(['quantity' => 1]);
+    $cart->shouldReceive('remove_cart_item')->with('abc');
+    $cart->shouldReceive('add_to_cart')->andReturn('newkey');
+    stubWcWithCart($cart);
+
+    $reply = cartHost()->updateCartItem(wooMakeRequest([
+      'cart_item_key' => 'abc',
+      'quantity' => 1,
+      'variation_id' => 7,
+      'product_id' => 42,
+      'variation' => ['pa_color' => 'red'],
+    ]));
+    $body = $reply->getBody();
+
+    expect($body['success'])->toBeTrue()
+      ->and($body['cart_item_key'])->toBe('newkey')
+      ->and($cart->cart_contents['newkey']['position'])->toBe(0.001);
+  });
+
+  it('replies 400 when the replacement add fails', function (): void {
+    $cart = calculableCartWith(['abc' => ['position' => 2.0]]);
+    $cart->shouldReceive('get_cart_item')->with('abc')->andReturn(['position' => 2.0]);
+    $cart->shouldReceive('remove_cart_item')->with('abc');
+    $cart->shouldReceive('add_to_cart')->andReturn(false);
+    stubWcWithCart($cart);
+
+    $reply = cartHost()->updateCartItem(wooMakeRequest([
+      'cart_item_key' => 'abc',
+      'quantity' => 1,
+      'variation_id' => 7,
+      'product_id' => 42,
+      'variation' => ['pa_color' => 'red'],
+    ]));
+
+    expect($reply->getBody()['success'])->toBeFalse()
+      ->and($reply->getBody()['message'])->toBe('Failed to update cart item');
   });
 });
 
@@ -652,6 +889,44 @@ describe('validateCoupon', function (): void {
 
     expect($body['success'])->toBeFalse()
       ->and($body['valid'])->toBeFalse();
+  });
+
+  it('returns valid for a coupon that passes discount validation', function (): void {
+    Functions\when('sanitize_text_field')->returnArg();
+    WC_Discounts::$nextResult = true;
+    stubWcWithCart(makeCart());
+
+    $reply = cartHost()->validateCoupon(wooMakeRequest(['coupon' => 'SAVE10']));
+    $body = $reply->getBody();
+
+    expect($body['success'])->toBeTrue()
+      ->and($body['valid'])->toBeTrue();
+  });
+
+  it('returns the WP_Error message when the coupon is invalid', function (): void {
+    Functions\when('sanitize_text_field')->returnArg();
+    WC_Discounts::$nextResult = new WP_Error('invalid_coupon', 'Coupon expired');
+    stubWcWithCart(makeCart());
+
+    $reply = cartHost()->validateCoupon(wooMakeRequest(['coupon' => 'EXPIRED']));
+    $body = $reply->getBody();
+
+    expect($body['success'])->toBeFalse()
+      ->and($body['valid'])->toBeFalse()
+      ->and($body['message'])->toBe('Coupon expired');
+  });
+
+  it('returns invalid when discount validation throws', function (): void {
+    Functions\when('sanitize_text_field')->returnArg();
+    WC_Discounts::$nextResult = new Exception('discount boom');
+    stubWcWithCart(makeCart());
+
+    $reply = cartHost()->validateCoupon(wooMakeRequest(['coupon' => 'BOOM']));
+    $body = $reply->getBody();
+
+    expect($body['success'])->toBeFalse()
+      ->and($body['valid'])->toBeFalse()
+      ->and($body['message'])->toBe('discount boom');
   });
 });
 
@@ -750,6 +1025,57 @@ describe('formatCartItems', function (): void {
       ->and($items[0]['price']['is_on_sale'])->toBeTrue()
       ->and($items[0]['subtotal'])->toBe('$200.00');
   });
+
+  it('returns an empty list when get_cart is not an array', function (): void {
+    $cart = makeCart();
+    $cart->shouldReceive('get_cart')->andReturn(null);
+
+    expect(invokeHost(cartHost(), 'formatCartItems', $cart))->toBe([]);
+  });
+
+  it('includes productData for a variable parent product', function (): void {
+    Functions\when('apply_filters')->alias(static fn (string $hook, mixed $value = null) => $value);
+    Functions\when('get_woocommerce_currency')->justReturn('USD');
+    priceFuncStubs();
+
+    $parent = Mockery::mock('WC_Product_Variable');
+    $parent->shouldReceive('is_type')->with('variable')->andReturn(true);
+    $parent->shouldReceive('get_available_variations')->andReturn([]);
+    $parent->shouldReceive('get_variation_attributes')->andReturn([]);
+    Functions\when('wc_get_product')->justReturn($parent);
+
+    $product = Mockery::mock('WC_Product');
+    $product->shouldReceive('get_regular_price')->andReturn(100.0);
+    $product->shouldReceive('get_sale_price')->andReturn(0.0);
+    $product->shouldReceive('is_on_sale')->andReturn(false);
+    $product->shouldReceive('get_id')->andReturn(7);
+    $product->shouldReceive('get_title')->andReturn('Variant');
+    $product->shouldReceive('get_short_description')->andReturn('');
+    $product->shouldReceive('get_sku')->andReturn('SKU7');
+    $product->shouldReceive('get_price')->andReturn(100.0);
+    $product->shouldReceive('get_image_id')->andReturn(0);
+
+    $cart = makeCart();
+    $cart->shouldReceive('get_cart')->andReturn([
+      'k1' => [
+        'data' => $product,
+        'product_id' => 42,
+        'variation_id' => 7,
+        'quantity' => 1,
+        'position' => 1.0,
+        'line_subtotal' => 100.0,
+        'line_total' => 100.0,
+        'line_tax' => 0.0,
+        'variation' => [],
+      ],
+    ]);
+
+    $items = invokeHost(cartHost(), 'formatCartItems', $cart);
+
+    expect($items)->toHaveCount(1)
+      ->and($items[0])->toHaveKey('productData')
+      ->and($items[0]['productData'])->toBe(['variations' => [], 'attributes' => []]);
+  });
 });
 
 describe('formatAttributes', function (): void {
@@ -771,6 +1097,30 @@ describe('formatAttributes', function (): void {
   it('returns an empty array when there are no variation attributes', function (): void {
     $parent = Mockery::mock('WC_Product_Variable');
     $parent->shouldReceive('get_variation_attributes')->andReturn([]);
+
+    expect(invokeHost(cartHost(), 'formatAttributes', $parent))->toBe([]);
+  });
+
+  it('skips an attribute whose options are not an array', function (): void {
+    Functions\when('WC_attribute_label')->justReturn('Color');
+
+    $parent = Mockery::mock('WC_Product_Variable');
+    $parent->shouldReceive('get_variation_attributes')->andReturn([
+      'pa_color' => 'not-an-array',
+    ]);
+
+    expect(invokeHost(cartHost(), 'formatAttributes', $parent))->toBe([]);
+  });
+
+  it('skips an attribute when the label lookup throws', function (): void {
+    Functions\when('WC_attribute_label')->alias(static function (): string {
+      throw new Exception('label boom');
+    });
+
+    $parent = Mockery::mock('WC_Product_Variable');
+    $parent->shouldReceive('get_variation_attributes')->andReturn([
+      'pa_color' => ['Red', 'Blue'],
+    ]);
 
     expect(invokeHost(cartHost(), 'formatAttributes', $parent))->toBe([]);
   });
@@ -811,6 +1161,24 @@ describe('formatVariations', function (): void {
 
     expect(invokeHost(cartHost(), 'formatVariations', $parent))->toBe([]);
   });
+
+  it('returns null for a variation whose formatting throws', function (): void {
+    Functions\when('apply_filters')->alias(static function (string $hook, mixed $value = null) {
+      if ($hook === 'fern:woo:cart_item_variation_meta_data') {
+        throw new Exception('variation meta boom');
+      }
+
+      return $value;
+    });
+    priceFuncStubs();
+
+    $parent = Mockery::mock('WC_Product_Variable');
+    $parent->shouldReceive('get_available_variations')->andReturn([
+      ['variation_id' => 7, 'regular_price' => 100.0, 'sale_price' => 80.0, 'display_price' => 80.0],
+    ]);
+
+    expect(invokeHost(cartHost(), 'formatVariations', $parent))->toBe([null]);
+  });
 });
 
 describe('getVariableProductData', function (): void {
@@ -822,5 +1190,16 @@ describe('getVariableProductData', function (): void {
     $result = invokeHost(cartHost(), 'getVariableProductData', $parent);
 
     expect($result)->toBe(['variations' => [], 'attributes' => []]);
+  });
+});
+
+describe('controlTaxCalculation', function (): void {
+  it('toggles the tax filter around the callback when calculation is disabled', function (): void {
+    $ran = false;
+    invokeHost(cartHost(), 'controlTaxCalculation', false, function () use (&$ran): void {
+      $ran = true;
+    });
+
+    expect($ran)->toBeTrue();
   });
 });

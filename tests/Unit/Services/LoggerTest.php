@@ -1,6 +1,7 @@
 <?php declare(strict_types=1);
 
 use Brain\Monkey\Functions;
+use Fern\Core\Config;
 use Fern\Core\Logger\Logger;
 
 if (!defined('WP_DEBUG_LOG')) {
@@ -121,5 +122,21 @@ describe('useLogger', function (): void {
     Logger::useLogger('default');
 
     expect(Logger::getLogFilePath())->toBe(loggerTempDir() . '/debug.log');
+  });
+});
+
+describe('resolveLogFolder fallbacks', function (): void {
+  it('uses the framework logs directory when WP_DEBUG_LOG is not a string', function (): void {
+    $root = sys_get_temp_dir() . '/fern-logger-root-' . uniqid('', true);
+    Config::getInstance()->setConfig(['root' => $root]);
+
+    $method = new ReflectionMethod(Logger::class, 'resolveLogFolder');
+    $resolved = $method->invoke(null, false);
+
+    expect($resolved)->toBe($root . '/logs')
+      ->and(is_dir($resolved))->toBeTrue();
+
+    @rmdir($resolved);
+    @rmdir($root);
   });
 });

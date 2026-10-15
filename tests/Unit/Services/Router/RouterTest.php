@@ -8,6 +8,7 @@ use Fern\Core\Factory\Singleton;
 use Fern\Core\Fern;
 use Fern\Core\Services\Actions\Action;
 use Fern\Core\Services\Controller\ControllerResolver;
+use Fern\Core\Services\HTTP\Reply;
 use Fern\Core\Services\HTTP\Request;
 use Fern\Core\Services\Router\Router;
 use Tests\Fixtures\FakeRequest;
@@ -269,6 +270,130 @@ function bindRouterRequest(RouterFakeRequest $request): void {
  */
 function makeRouter(): Router {
   return Router::getInstance();
+}
+
+/**
+ * Marker exception thrown from a `fern:core:reply:headers` filter so that the
+ * Router's internal Reply::send() calls (400/500) abort before hitting the
+ * process-terminating exit() seam, letting the test observe the reply.
+ */
+final class RouterHaltSend extends RuntimeException {}
+
+/**
+ * A controller-like Singleton with no handle() method, used to exercise the
+ * Router's defensive "instance has no handle" branches.
+ */
+final class RouterNoHandleController extends Singleton {}
+
+/**
+ * Configurable ControllerResolver double. The real resolver never returns null
+ * (it throws), so this stub is used to drive the Router's documented null
+ * contracts (pass back to WordPress / let WordPress render the 404).
+ */
+final class RouterStubResolver extends ControllerResolver {
+  public ?string $notFoundController = null;
+
+  public ?string $defaultController = null;
+
+  public ?string $resolvedController = null;
+
+  public function get404Controller(): ?string {
+    return $this->notFoundController;
+  }
+
+  public function getDefaultController(): ?string {
+    return $this->defaultController;
+  }
+
+  public function resolve(string $type, string $handle): ?string {
+    return $this->resolvedController;
+  }
+
+  public function findControllerWithAction(string $actionName): ?string {
+    return null;
+  }
+
+  public function hasAction(string $controllerClass, string $actionName): bool {
+    return false;
+  }
+}
+
+/**
+ * Injects a ControllerResolver double as the active singleton. Must run before
+ * the Router is instantiated (the Router caches its resolver in the constructor).
+ */
+function bindRouterResolver(ControllerResolver $resolver): void {
+  $property = new ReflectionProperty(Singleton::class, '_instances');
+  $instances = $property->getValue();
+  $instances = is_array($instances) ? $instances : [];
+  $instances[ControllerResolver::class] = $resolver;
+  $property->setValue(null, $instances);
+}
+
+/**
+ * Instantiates a RouterStubResolver without running the scanning constructor.
+ */
+function makeStubResolver(): RouterStubResolver {
+  /** @var RouterStubResolver $resolver */
+  $resolver = (new ReflectionClass(RouterStubResolver::class))->newInstanceWithoutConstructor();
+
+  return $resolver;
+}
+
+/**
+ * Sets the current Action singleton. A null name leaves the action a "bad
+ * request"; any other value (including '') is applied via setName().
+ */
+function setRouterAction(RouterFakeRequest $request, ?string $name): Action {
+  $action = new Action($request);
+
+  if ($name !== null) {
+    $action->setName($name);
+  }
+
+  (new ReflectionProperty(Action::class, 'current'))->setValue(null, $action);
+
+  return $action;
+}
+
+/**
+ * Registers a `fern:core:reply:headers` filter that captures the reply then
+ * throws RouterHaltSend, so the Router's non-hijacked Reply::send() calls abort
+ * before exit(). Returns a holder whose ->reply is the captured Reply.
+ */
+function haltReplySend(): stdClass {
+  $capture = new stdClass();
+  $capture->reply = null;
+
+  Filters\expectApplied('fern:core:reply:headers')
+    ->zeroOrMoreTimes()
+    ->andReturnUsing(function ($reply) use ($capture) {
+      $capture->reply = $reply;
+
+      throw new RouterHaltSend('halted');
+    });
+
+  return $capture;
+}
+
+/**
+ * Invokes the private Router::handleActionRequest() with the given controller.
+ */
+function invokeHandleActionRequest(Router $router, string $controller): void {
+  (new ReflectionMethod(Router::class, 'handleActionRequest'))->invoke($router, $controller);
+}
+
+/**
+ * Brain Monkey cannot undefine wp_generate_uuid4 once another test file (e.g.
+ * ApiTest) has stubbed it. When it is already defined we must provide an
+ * expectation so createErrorId() does not raise MissingFunctionExpectations;
+ * when it is not (this file in isolation) we leave it undefined so createErrorId
+ * exercises its uniqid() fallback branch.
+ */
+function guardUuidLeak(): void {
+  if (function_exists('wp_generate_uuid4')) {
+    Functions\when('wp_generate_uuid4')->justReturn('router-guard-uuid');
+  }
 }
 
 afterEach(function (): void {
@@ -986,5 +1111,300 @@ describe('resolveAdminActions', function (): void {
     } finally {
       $devProp->setValue(null, null);
     }
+  });
+});
+
+describe('boot closures', function (): void {
+  it('runs the template_include and admin_init closures registered during boot', function (): void {
+    $this->routerRoot = makeRouterRoot();
+    // rest => true makes resolve()/resolveAdminActions() short-circuit via
+    // shouldStop() (no controllers, no exiting Reply::send()); action => true
+    // makes boot() register the admin_init hook.
+    bindRouterRequest(new RouterFakeRequest(['action' => true, 'rest' => true]));
+
+    $callbacks = [];
+    Functions\when('add_filter')->alias(function (string $hook, $cb = null) use (&$callbacks): bool {
+      $callbacks[$hook] = $cb;
+      return true;
+    });
+    Functions\when('add_action')->justReturn(true);
+
+    Router::boot();
+
+    expect($callbacks)->toHaveKey('template_include')
+      ->and($callbacks)->toHaveKey('admin_init');
+
+    // Execute the closure bodies that boot() only registered.
+    ($callbacks['template_include'])(null);
+    ($callbacks['admin_init'])();
+
+    expect(Router::getInstance()->didPass)->toBeTrue();
+  });
+});
+
+describe('resolve pass-through', function (): void {
+  it('sets didPass when the resolver yields no controller for the view', function (): void {
+    $this->routerRoot = makeRouterRoot();
+
+    Functions\when('get_queried_object')->justReturn(new stdClass());
+
+    bindRouterRequest(new RouterFakeRequest([
+      'currentId' => -1,
+      'postType' => 'ghost',
+    ]));
+
+    $resolver = makeStubResolver();
+    $resolver->defaultController = null;
+    $resolver->resolvedController = null;
+    bindRouterResolver($resolver);
+
+    $router = makeRouter();
+    $router->resolve();
+
+    expect($router->didPass)->toBeTrue();
+  });
+});
+
+describe('handle404 resolver contracts', function (): void {
+  it('returns and lets WordPress render the 404 when the resolver has no 404 controller', function (): void {
+    $this->routerRoot = makeRouterRoot();
+    bindRouterRequest(new RouterFakeRequest());
+
+    $resolver = makeStubResolver();
+    $resolver->notFoundController = null;
+    bindRouterResolver($resolver);
+
+    $router = makeRouter();
+
+    expect($router->handle404())->toBeNull();
+  });
+
+  it('throws when the 404 controller instance has no handle method', function (): void {
+    $this->routerRoot = makeRouterRoot();
+    bindRouterRequest(new RouterFakeRequest());
+
+    $resolver = makeStubResolver();
+    $resolver->notFoundController = RouterNoHandleController::class;
+    bindRouterResolver($resolver);
+
+    $router = makeRouter();
+
+    expect(fn (): mixed => $router->handle404())
+      ->toThrow(RouterException::class, 'Controller handle method must return a Reply object');
+  });
+});
+
+describe('getArchivePageId WooCommerce branches', function (): void {
+  it('derives the archive page id from the active WooCommerce page', function (): void {
+    $this->routerRoot = makeRouterRoot();
+    $class = writeRouterController($this->routerRoot, 'ShopArchiveView', '88');
+    writeRouterController($this->routerRoot, 'ShopArchiveDefault', '_default');
+
+    Functions\when('get_queried_object')->justReturn(new stdClass());
+    Functions\when('wc_get_page_id')->justReturn(88);
+    Functions\when('is_shop')->justReturn(true);
+    Functions\when('is_account_page')->justReturn(true);
+    Functions\when('is_cart')->justReturn(true);
+    Functions\when('is_checkout')->justReturn(true);
+    Functions\when('is_home')->justReturn(false);
+
+    bindRouterRequest(new RouterFakeRequest([
+      'currentId' => -1,
+      'postType' => 'product',
+      'archive' => true,
+    ]));
+
+    $router = makeRouter();
+
+    expect($router->resolveController())->toBe($class);
+  });
+});
+
+describe('handleAdminController inference', function (): void {
+  it('returns the controller inferred from the action name when no page param is present', function (): void {
+    $this->routerRoot = makeRouterRoot();
+    $class = writeRouterController($this->routerRoot, 'InferredAdminView', 'inferred-admin', ['adminThing']);
+
+    $request = new RouterFakeRequest([
+      'action' => true,
+      'method' => 'POST',
+      'body' => ['action' => 'adminThing'],
+    ]);
+    bindRouterRequest($request);
+    setRouterAction($request, 'adminThing');
+
+    $router = makeRouter();
+
+    expect($router->resolveController('admin'))->toBe($class);
+  });
+});
+
+describe('handleGetRequest defensive branches', function (): void {
+  it('falls back to handle404 when the instance has no handle and the request is a 404', function (): void {
+    $this->routerRoot = makeRouterRoot();
+    writeRouterController($this->routerRoot, 'GetFallback404', '_404');
+
+    Functions\when('get_queried_object')->justReturn(new stdClass());
+    bindRouterRequest(new RouterFakeRequest(['is404' => true]));
+
+    $router = makeRouter();
+
+    $handleGet = new ReflectionMethod(Router::class, 'handleGetRequest');
+
+    expect(fn (): mixed => $handleGet->invoke($router, RouterNoHandleController::class))
+      ->not->toThrow(Exception::class);
+  });
+});
+
+describe('action error handling', function (): void {
+  // NOTE ON ORDER: the single test that stubs wp_generate_uuid4 (to cover the
+  // uuid branch of createErrorId) MUST run last. Brain Monkey cannot undefine a
+  // function once stubbed, so any later createErrorId() call would invoke the
+  // now-defined-but-unexpected function and throw MissingFunctionExpectations.
+  it('sends a 400 reply for a bad action request', function (): void {
+    $this->routerRoot = makeRouterRoot();
+    $class = writeRouterController($this->routerRoot, 'BadReqActionCtrl', 'badreq');
+
+    $request = new RouterFakeRequest(['action' => true, 'method' => 'POST']);
+    bindRouterRequest($request);
+    setRouterAction($request, null); // null name => bad request
+
+    $capture = haltReplySend();
+
+    $router = makeRouter();
+
+    expect(fn (): mixed => invokeHandleActionRequest($router, $class))
+      ->toThrow(RouterHaltSend::class);
+
+    expect($capture->reply)->toBeInstanceOf(Reply::class)
+      ->and($capture->reply->getBody())->toBe('Bad Request');
+  });
+
+  it('returns a 500 (uniqid error id) when the action name is a reserved method', function (): void {
+    $this->routerRoot = makeRouterRoot();
+    $class = writeRouterController($this->routerRoot, 'ReservedNameActionCtrl', 'reservedname');
+
+    $request = new RouterFakeRequest(['action' => true, 'method' => 'POST']);
+    bindRouterRequest($request);
+    setRouterAction($request, 'handle');
+
+    guardUuidLeak();
+    $capture = haltReplySend();
+
+    $router = makeRouter();
+
+    expect(fn (): mixed => invokeHandleActionRequest($router, $class))
+      ->toThrow(RouterHaltSend::class);
+
+    expect($capture->reply->getBody())->toContain('Internal Server Error');
+  });
+
+  it('returns a 500 when the action is not registered on the controller', function (): void {
+    $this->routerRoot = makeRouterRoot();
+    $class = writeRouterController($this->routerRoot, 'UnknownActionCtrl', 'unknownaction');
+
+    $request = new RouterFakeRequest(['action' => true, 'method' => 'POST']);
+    bindRouterRequest($request);
+    setRouterAction($request, 'ghostAction');
+
+    guardUuidLeak();
+    $capture = haltReplySend();
+
+    $router = makeRouter();
+
+    expect(fn (): mixed => invokeHandleActionRequest($router, $class))
+      ->toThrow(RouterHaltSend::class);
+
+    expect($capture->reply->getBody())->toContain('Internal Server Error');
+  });
+
+  it('returns a 500 when the resolved action method is static', function (): void {
+    $this->routerRoot = makeRouterRoot();
+    $extra = "  public static function staticAction(\\Fern\\Core\\Services\\HTTP\\Request \$request, \\Fern\\Core\\Services\\Actions\\Action \$action): \\Fern\\Core\\Services\\HTTP\\Reply { return (new Reply(200, 'ok'))->hijack(); }\n";
+    $class = writeRouterController($this->routerRoot, 'StaticActionCtrl', 'staticaction', [], $extra);
+
+    $request = new RouterFakeRequest(['action' => true, 'method' => 'POST']);
+    bindRouterRequest($request);
+    setRouterAction($request, 'staticAction');
+
+    guardUuidLeak();
+    $capture = haltReplySend();
+
+    $router = makeRouter();
+
+    // Simulate a stale cache that lists the static method as a runnable action.
+    $registryProp = new ReflectionProperty(ControllerResolver::class, 'controllerRegistry');
+    /** @var array<string, array{actions: array<int, string>}> $registry */
+    $registry = $registryProp->getValue();
+    $registry[$class]['actions'][] = 'staticAction';
+    $registryProp->setValue(null, $registry);
+
+    expect(fn (): mixed => invokeHandleActionRequest($router, $class))
+      ->toThrow(RouterHaltSend::class);
+
+    expect($capture->reply->getBody())->toContain('Internal Server Error');
+  });
+
+  it('returns a 500 when the can_run filter rejects the action', function (): void {
+    $this->routerRoot = makeRouterRoot();
+    $class = writeRouterController($this->routerRoot, 'CanRunActionCtrl', 'canrun', ['blockedAction']);
+
+    $request = new RouterFakeRequest(['action' => true, 'method' => 'POST']);
+    bindRouterRequest($request);
+    setRouterAction($request, 'blockedAction');
+
+    guardUuidLeak();
+    Filters\expectApplied('fern:core:action:can_run')->andReturn(false);
+    $capture = haltReplySend();
+
+    $router = makeRouter();
+
+    expect(fn (): mixed => invokeHandleActionRequest($router, $class))
+      ->toThrow(RouterHaltSend::class);
+
+    expect($capture->reply->getBody())->toContain('Internal Server Error');
+  });
+
+  // MUST be the last createErrorId test: stubbing wp_generate_uuid4 leaks a
+  // Brain Monkey function definition that would break any later createErrorId call.
+  it('returns a 500 (uuid error id) when the action name is an empty string', function (): void {
+    $this->routerRoot = makeRouterRoot();
+    $class = writeRouterController($this->routerRoot, 'EmptyNameActionCtrl', 'emptyname');
+
+    $request = new RouterFakeRequest(['action' => true, 'method' => 'POST']);
+    bindRouterRequest($request);
+    setRouterAction($request, ''); // empty (non-null) name => reaches the guard
+
+    Functions\when('wp_generate_uuid4')->justReturn('abcd-uuid');
+
+    $capture = haltReplySend();
+
+    $router = makeRouter();
+
+    expect(fn (): mixed => invokeHandleActionRequest($router, $class))
+      ->toThrow(RouterHaltSend::class);
+
+    expect($capture->reply)->toBeInstanceOf(Reply::class)
+      ->and($capture->reply->getBody())->toContain('Internal Server Error')
+      ->and($capture->reply->getBody())->toContain('abcd-uuid');
+  });
+});
+
+describe('canRunAction validation', function (): void {
+  it('returns false and swallows the exception when attribute validation fails', function (): void {
+    $this->routerRoot = makeRouterRoot();
+    $class = writeRouterController($this->routerRoot, 'ValidatingCtrl', 'validating');
+
+    bindRouterRequest(new RouterFakeRequest());
+
+    $router = makeRouter();
+    /** @var object $controller */
+    $controller = $class::getInstance();
+
+    $canRunAction = new ReflectionMethod(Router::class, 'canRunAction');
+
+    // A non-existent method makes AttributesManager::validateMethod() throw an
+    // AttributeValidationException, which canRunAction() must translate to false.
+    expect($canRunAction->invoke($router, 'ghostMethod', $controller))->toBeFalse();
   });
 });

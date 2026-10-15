@@ -138,7 +138,11 @@ class ControllerResolver extends Singleton {
 
     $cacheTime = filemtime($this->cacheFilePath);
     if ($cacheTime === false) {
+      // @codeCoverageIgnoreStart
+      // Defensive: the path's existence is confirmed at line 129, so filemtime
+      // only fails on a filesystem-level stat error that cannot be induced in-process.
       return false;
+      // @codeCoverageIgnoreEnd
     }
 
     // Only perform expensive file checking in development
@@ -238,7 +242,11 @@ class ControllerResolver extends Singleton {
    */
   private function processClassWithActions(string $className): void {
     if (!class_exists($className)) {
+      // @codeCoverageIgnoreStart
+      // Defensive: the only caller, processControllerFile(), already guards this
+      // call with its own class_exists() check, so this branch is never taken.
       return;
+      // @codeCoverageIgnoreEnd
     }
 
     $reflection = new ReflectionClass($className);
@@ -310,7 +318,12 @@ class ControllerResolver extends Singleton {
 
       // Exclude methods from core framework classes
       if (in_array($declaringClass, $excludedClasses, true)) {
+        // @codeCoverageIgnoreStart
+        // Defensive: Singleton exposes no public instance method that survives the
+        // reserved/static/underscore filters above, and the Controller interface is
+        // never the declaring class of a method body, so this is unreachable today.
         continue;
+        // @codeCoverageIgnoreEnd
       }
 
       // Include all other public methods as potential actions
@@ -829,7 +842,11 @@ PHP;
       $controller = $controllerClass::getInstance();
 
       if (!is_object($controller) || !method_exists($controller, 'handle')) {
+        // @codeCoverageIgnoreStart
+        // Defensive: $controllerClass is a Singleton Controller, so getInstance()
+        // always returns an object exposing the interface-mandated handle() method.
         return;
+        // @codeCoverageIgnoreEnd
       }
 
       $reply = $controller->handle(Request::getCurrent());

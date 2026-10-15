@@ -268,7 +268,7 @@ final class Blocks extends Singleton {
   }
 
   /**
-   * Proxy helper hooked via Filters to register contextual data for a block before render.
+   * Static helper apps call to register contextual data for a block before it renders.
    *
    * @param array<string,mixed> $data
    * @return array<string,mixed>

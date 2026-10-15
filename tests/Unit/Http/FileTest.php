@@ -1,6 +1,31 @@
 <?php declare(strict_types=1);
 
+namespace Fern\Core\Services\HTTP {
+  /*
+   * Local pass-through shim for function_exists() inside the File namespace.
+   *
+   * File::upload() only calls loadWordPressDependencies() when
+   * function_exists('wp_handle_upload') is false. That global is defined by the
+   * first Brain Monkey stub and can never be undefined again, so the on-demand
+   * branch is otherwise unreachable once any upload test has run. The shim
+   * delegates to the real function unless a test sets the toggle to the exact
+   * name it wants reported as missing, keeping every other caller untouched.
+   */
+  if (!function_exists('Fern\\Core\\Services\\HTTP\\function_exists')) {
+    function function_exists(string $function): bool {
+      if (($GLOBALS['__fern_force_missing_function'] ?? null) === $function) {
+        return false;
+      }
+
+      return \function_exists($function);
+    }
+  }
+}
+
+namespace {
+
 use Brain\Monkey\Functions;
+use Fern\Core\Config;
 use Fern\Core\Errors\FileHandlingError;
 use Fern\Core\Services\HTTP\File;
 use Fern\Core\Services\HTTP\FileConstants;
@@ -21,6 +46,23 @@ function makeTextFile(string $name = 'doc.txt', int $error = UPLOAD_ERR_OK): Fil
   $tmp = makeTmpFile('plain text content');
 
   return new File($name, $name, $tmp, 'text/plain', $tmp, $error, 18);
+}
+
+function removeDirRecursive(string $dir): void {
+  if (!is_dir($dir)) {
+    return;
+  }
+
+  foreach (scandir($dir) ?: [] as $entry) {
+    if ($entry === '.' || $entry === '..') {
+      continue;
+    }
+
+    $path = $dir . '/' . $entry;
+    is_dir($path) ? removeDirRecursive($path) : @unlink($path);
+  }
+
+  @rmdir($dir);
 }
 
 afterEach(function (): void {
@@ -404,3 +446,104 @@ describe('upload success flow', function (): void {
     @rmdir($uploadsDir);
   });
 });
+
+describe('upload_dir path filter', function (): void {
+  beforeEach(function (): void {
+    Functions\when('apply_filters')->alias(fn (string $hook, mixed $value): mixed => $value);
+    Functions\when('remove_filter')->justReturn(true);
+  });
+
+  it('rewrites path/url/subdir for arrays and passes non-arrays through', function (): void {
+    $uploadsDir = sys_get_temp_dir() . '/fern-file-test-uploads-' . uniqid('', true);
+    mkdir($uploadsDir . '/sub', 0777, true);
+
+    $tmp = makeTmpFile('plain text content');
+    $file = new File('doc', 'note.txt', $tmp, 'text/plain', $tmp, UPLOAD_ERR_OK, 18);
+
+    Functions\when('wp_upload_dir')->justReturn(['basedir' => $uploadsDir]);
+
+    $captured = null;
+    Functions\when('add_filter')->alias(function (string $hook, $callback, int $priority = 10, int $args = 1) use (&$captured): bool {
+      if ($hook === 'upload_dir' && $callback instanceof Closure) {
+        $captured = $callback;
+      }
+
+      return true;
+    });
+    Functions\expect('wp_handle_upload')
+      ->once()
+      ->andReturn(['file' => $uploadsDir . '/sub/note.txt', 'url' => 'https://site.test/sub/note.txt']);
+
+    $file->upload('sub');
+
+    expect($captured)->toBeInstanceOf(Closure::class)
+      ->and($captured('left-unchanged'))->toBe('left-unchanged');
+
+    $rewritten = $captured([
+      'basedir' => '/base',
+      'baseurl' => 'https://site.test/base',
+      'path' => '/base',
+      'url' => 'https://site.test/base',
+      'subdir' => '',
+    ]);
+
+    expect($rewritten['path'])->toBe('/base/sub')
+      ->and($rewritten['url'])->toBe('https://site.test/base/sub')
+      ->and($rewritten['subdir'])->toBe('/sub');
+
+    removeDirRecursive($uploadsDir);
+  });
+});
+
+describe('on-demand WordPress dependency loading', function (): void {
+  afterEach(function (): void {
+    unset($GLOBALS['__fern_force_missing_function']);
+  });
+
+  beforeEach(function (): void {
+    Functions\when('apply_filters')->alias(fn (string $hook, mixed $value): mixed => $value);
+    Functions\when('trailingslashit')->alias(fn (string $s): string => rtrim($s, '/') . '/');
+    Functions\when('add_filter')->justReturn(true);
+    Functions\when('remove_filter')->justReturn(true);
+  });
+
+  it('requires the WordPress upload includes when wp_handle_upload is undefined', function (): void {
+    $root = sys_get_temp_dir() . '/fern-file-test-root-' . uniqid('', true) . '/';
+    mkdir($root . 'public/wp/wp-admin/includes', 0777, true);
+
+    foreach (['file', 'image', 'media'] as $include) {
+      file_put_contents($root . 'public/wp/wp-admin/includes/' . $include . '.php', '<?php');
+    }
+
+    Config::boot(['root' => $root]);
+    $GLOBALS['__fern_force_missing_function'] = 'wp_handle_upload';
+
+    Functions\expect('wp_handle_upload')
+      ->once()
+      ->andReturn(['file' => $root . 'note.txt', 'url' => 'https://site.test/note.txt']);
+
+    $tmp = makeTmpFile('plain text content');
+    $file = new File('doc', 'note.txt', $tmp, 'text/plain', $tmp, UPLOAD_ERR_OK, 18);
+
+    $file->upload();
+
+    expect($file->getFullPath())->toBe($root . 'note.txt');
+
+    removeDirRecursive(rtrim($root, '/'));
+  });
+
+  it('throws when the WordPress upload includes cannot be resolved', function (): void {
+    $root = sys_get_temp_dir() . '/fern-file-test-missing-' . uniqid('', true) . '/';
+
+    Config::boot(['root' => $root]);
+    $GLOBALS['__fern_force_missing_function'] = 'wp_handle_upload';
+
+    $tmp = makeTmpFile('plain text content');
+    $file = new File('doc', 'note.txt', $tmp, 'text/plain', $tmp, UPLOAD_ERR_OK, 18);
+
+    expect(fn (): null => $file->upload())
+      ->toThrow(FileHandlingError::class, 'Cannot resolve Wordpress upload handling files.');
+  });
+});
+
+}

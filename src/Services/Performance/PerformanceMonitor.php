@@ -26,22 +26,8 @@ class PerformanceMonitor {
    * Initialize performance monitoring
    */
   public static function init(): void {
-    // Always enable in development mode for standalone profiling
-    // Don't check for QM here as WordPress isn't loaded yet
+    // Enable in development mode for standalone profiling.
     self::$enabled = Fern::isDev();
-
-    if (self::$enabled) {
-      // Register shutdown hook to optionally integrate with QM later
-      register_shutdown_function([self::class, 'enableQMIntegrationIfAvailable']);
-    }
-  }
-
-  /**
-   * Enable Query Monitor integration if available (called later when WP is loaded)
-   */
-  public static function enableQMIntegrationIfAvailable(): void {
-    // This will be called after WordPress is fully loaded
-    // We can safely check for QM functions here
   }
 
   /**

@@ -221,5 +221,17 @@ describe('filterAllowedBlocks', function (): void {
 
     expect($gutenberg->filterAllowedBlocks(true))->toBe(['core/paragraph', 'core/image']);
   });
+
+  it('treats a block with no category as uncategorised during a categorised exclusion', function (): void {
+    // getBlockCategory returns null when the registered block has no category,
+    // so the category-based exclusion never matches and the block is kept.
+    WP_Block_Type_Registry::seed([
+      'core/spacer' => new WP_Block_Type(null),
+    ]);
+
+    $gutenberg = makeGutenberg(['core_block_exclude' => ['media' => 'core/*']]);
+
+    expect($gutenberg->filterAllowedBlocks(true))->toBe(['core/spacer']);
+  });
 });
 

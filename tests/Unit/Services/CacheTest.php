@@ -3,6 +3,26 @@
 use Brain\Monkey\Functions;
 use Fern\Core\Utils\Cache;
 
+final class MemoAdder {
+  public int $calls = 0;
+
+  public function twice(int $n): int {
+    $this->calls++;
+
+    return $n * 2;
+  }
+
+  public static function triple(int $n): int {
+    return $n * 3;
+  }
+}
+
+final class MemoInvokable {
+  public function __invoke(int $n): int {
+    return $n;
+  }
+}
+
 beforeEach(function (): void {
   Functions\when('get_option')->justReturn([]);
 });
@@ -188,6 +208,96 @@ describe('save', function (): void {
       ->andReturn(true);
 
     Cache::save();
+  });
+});
+
+describe('expiry at read time', function (): void {
+  it('evicts and returns null when a persistent item is expired at read time', function (): void {
+    $cache = Cache::getInstance();
+
+    $property = new ReflectionProperty($cache, 'persistentCache');
+    $property->setValue($cache, [
+      'stale' => ['value' => 'gone', 'expires' => time() - 1000],
+    ]);
+
+    expect(Cache::get('stale'))->toBeNull()
+      ->and($cache->getCaches()['persistent'])->not->toHaveKey('stale');
+  });
+});
+
+describe('save with reflected expired items', function (): void {
+  it('deletes the option when a non-empty persistent cache holds only expired items', function (): void {
+    $cache = Cache::getInstance();
+
+    $property = new ReflectionProperty($cache, 'persistentCache');
+    $property->setValue($cache, [
+      'stale' => ['value' => 'x', 'expires' => time() - 1000],
+    ]);
+    $cache->setDirtyState(true);
+
+    Functions\expect('update_option')->never();
+    Functions\expect('delete_option')
+      ->once()
+      ->with(Cache::PERSISTENT_CACHE_OPTION)
+      ->andReturn(true);
+
+    Cache::save();
+
+    expect($cache->isDirty())->toBeFalse();
+  });
+});
+
+describe('useMemo callback key generation', function (): void {
+  it('memoizes a string function callback', function (): void {
+    $memo = Cache::useMemo('strlen', ['k']);
+
+    expect($memo('hello'))->toBe(5);
+  });
+
+  it('memoizes an internal (fromCallable) closure with no source file', function (): void {
+    $memo = Cache::useMemo(Closure::fromCallable('strlen'), ['k']);
+
+    expect($memo('abcd'))->toBe(4);
+  });
+
+  it('memoizes an object-method array callback and caches the result', function (): void {
+    $adder = new MemoAdder();
+    $memo = Cache::useMemo([$adder, 'twice'], ['k']);
+
+    expect($memo(5))->toBe(10)
+      ->and($memo(5))->toBe(10)
+      ->and($adder->calls)->toBe(1);
+  });
+
+  it('memoizes a static-method array callback', function (): void {
+    $memo = Cache::useMemo([MemoAdder::class, 'triple'], ['k']);
+
+    expect($memo(3))->toBe(9);
+  });
+
+  it('throws for an unsupported (invokable object) callback type', function (): void {
+    expect(fn() => Cache::useMemo(new MemoInvokable(), ['k']))
+      ->toThrow(InvalidArgumentException::class, 'Failed to generate memo key: Unsupported callback type');
+  });
+
+  it('throws when dependencies are not serializable', function (): void {
+    expect(fn() => Cache::useMemo('strlen', [fn() => 1]))
+      ->toThrow(InvalidArgumentException::class, 'Failed to generate memo key: Dependencies must be serializable');
+  });
+
+  it('throws when the closure source file cannot be read', function (): void {
+    // An eval()'d closure reports a synthetic filename, so file() fails inside
+    // generateMemoKey. Swallow the expected E_WARNING so the suite stays clean.
+    $closure = eval('return function () { return 42; };');
+
+    set_error_handler(static fn(): bool => true, E_WARNING);
+
+    try {
+      expect(fn() => Cache::useMemo($closure, ['k']))
+        ->toThrow(InvalidArgumentException::class, 'Failed to generate memo key: Failed to read file');
+    } finally {
+      restore_error_handler();
+    }
   });
 });
 

@@ -242,7 +242,11 @@ class File {
    */
   public function upload(?string $path = null): void {
     if (!$this->canUpload()) {
+      // @codeCoverageIgnoreStart
+      // Defensive: canUpload() only ever returns true or throws, so it never
+      // returns false; this guard is unreachable but keeps the contract explicit.
       throw new FileHandlingError('File cannot be uploaded.');
+      // @codeCoverageIgnoreEnd
     }
 
     if ($path !== null) {
@@ -396,15 +400,22 @@ class File {
             Types::getSafeInt($errorCodes[$i] ?? 0),
             Types::getSafeInt($sizes[$i] ?? 0),
         );
+        // @codeCoverageIgnoreStart
+        // Defensive: self() only receives Types-sanitised scalars and its
+        // constructor never throws InvalidArgumentException, so this is unreachable.
       } catch (InvalidArgumentException $e) {
         $errors[] = 'File ' . Types::getSafeString($names[$i] ?? '') . ': ' . $e->getMessage();
       }
+      // @codeCoverageIgnoreEnd
     }
 
     if ($errors !== []) {
+      // @codeCoverageIgnoreStart
+      // Defensive: $errors is only populated by the unreachable catch above.
       throw new FileHandlingError(
           "Failed to process multiple files:\n" . implode("\n", $errors),
       );
+      // @codeCoverageIgnoreEnd
     }
 
     return $files;
@@ -419,7 +430,11 @@ class File {
     $finfo = finfo_open(FILEINFO_MIME_TYPE);
 
     if ($finfo === false) {
+      // @codeCoverageIgnoreStart
+      // Defensive: finfo_open(FILEINFO_MIME_TYPE) with a valid constant never
+      // returns false while ext-fileinfo is loaded, so this is unreachable.
       throw new FileHandlingError('Failed to initialize fileinfo');
+      // @codeCoverageIgnoreEnd
     }
 
     $actualMime = finfo_file($finfo, $this->tmp_name);

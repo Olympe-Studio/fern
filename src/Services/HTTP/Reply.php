@@ -405,7 +405,7 @@ class Reply {
 
     if (!headers_sent()) {
       header('Content-Type: ' . $this->contentType . '; charset=' . Types::getSafeString(get_option('blog_charset')));
-      @http_response_code($this->status);
+      status_header($this->status);
     }
 
     $body = $this->getBody();
