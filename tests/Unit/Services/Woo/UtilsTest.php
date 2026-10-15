@@ -20,6 +20,14 @@ function stubWooPriceFunctions(
   Functions\when('wc_trim_zeros')->alias(static fn (string $price): string => preg_replace('/' . preg_quote('.', '/') . '0++$/', '', $price) ?? $price);
 }
 
+describe('formatPrice without WooCommerce', function (): void {
+  it('returns the raw string cast when WC() is not available', function (): void {
+    expect(function_exists('WC'))->toBeFalse();
+
+    expect(Utils::formatPrice(10))->toBe('10');
+  });
+});
+
 describe('formatPrice null and zero guards', function (): void {
   it('returns null for a null price', function (): void {
     expect(Utils::formatPrice(null))->toBeNull();

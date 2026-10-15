@@ -4,6 +4,15 @@ use Fern\Core\Utils\Types;
 
 mutates(Types::class);
 
+/*
+ * getSafeSlug's two null-guard branches are reached by forcing preg_replace to
+ * return null for a specific pattern. The Fern\Core\Utils\preg_replace
+ * pass-through shim (tests/fern-utils-shims.php) honours the toggle set below.
+ */
+afterEach(function (): void {
+  unset($GLOBALS['__fern_preg_replace_null_for']);
+});
+
 describe('getSafeWpValue', function (): void {
   it('maps a WP_Error to null', function (): void {
     expect(Types::getSafeWpValue(new WP_Error('code', 'boom')))->toBeNull();
@@ -157,5 +166,19 @@ describe('getSafeSlug', function (): void {
 
   it('returns empty string when nothing survives sanitisation', function (): void {
     expect(Types::getSafeSlug('***'))->toBe('');
+  });
+
+  it('throws when special-character removal yields null', function (): void {
+    $GLOBALS['__fern_preg_replace_null_for'] = '/[^a-zA-Z0-9\s-]/';
+
+    expect(fn (): string => Types::getSafeSlug('hello'))
+      ->toThrow(RuntimeException::class, 'Failed to process string for slug');
+  });
+
+  it('throws when separator collapsing yields null', function (): void {
+    $GLOBALS['__fern_preg_replace_null_for'] = '/[\s-]+/';
+
+    expect(fn (): string => Types::getSafeSlug('hello world'))
+      ->toThrow(RuntimeException::class, 'Failed to process string for slug');
   });
 });

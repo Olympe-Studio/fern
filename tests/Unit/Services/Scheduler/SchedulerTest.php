@@ -105,6 +105,13 @@ describe('createSchedule', function (): void {
     expect(fn () => Scheduler::createSchedule("every_{$huge}_days"))
       ->toThrow(SchedulerParsingError::class, 'too large');
   });
+
+  it('throws when a pattern-valid string carries a below-one interval', function (): void {
+    Filters\expectAdded('cron_schedules')->never();
+
+    expect(fn () => Scheduler::createSchedule('every_0_hours'))
+      ->toThrow(SchedulerParsingError::class, 'greater than 0');
+  });
 });
 
 describe('schedule', function (): void {

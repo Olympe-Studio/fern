@@ -4,6 +4,8 @@ use Brain\Monkey\Actions;
 use Brain\Monkey\Filters;
 use Brain\Monkey\Functions;
 use Fern\Core\Services\Shortcode\Shortcode;
+use Fern\Core\Services\Views\Views;
+use Tests\Fixtures\FakeRenderingEngine;
 
 /**
  * Registers a shortcode and returns the callback handed to add_shortcode.
@@ -171,5 +173,30 @@ describe('filter hooks', function (): void {
     });
 
     expect($callback([]))->toBe('12345');
+  });
+});
+
+describe('view fallback', function (): void {
+  beforeEach(function (): void {
+    (new ReflectionProperty(Views::class, 'engine'))->setValue(null, null);
+  });
+
+  afterEach(function (): void {
+    (new ReflectionProperty(Views::class, 'engine'))->setValue(null, null);
+  });
+
+  it('renders through Views when the render hook produces no output', function (): void {
+    $engine = new FakeRenderingEngine('view-fallback');
+    (new ReflectionProperty(Views::class, 'engine'))->setValue(null, $engine);
+
+    $callback = captureShortcodeCallback('fallback', ['title'], 'blocks/fallback');
+
+    // No fern:core:shortcode:render handler echoes, so renderToString() returns ''.
+    $html = $callback(['title' => 'Hi'], 'body');
+
+    expect($html)->toBe('view-fallback')
+      ->and($engine->lastTemplate)->toBe('blocks/fallback')
+      ->and($engine->lastData['attrs'])->toBe(['title' => 'Hi'])
+      ->and($engine->lastData['content'])->toBe('body');
   });
 });

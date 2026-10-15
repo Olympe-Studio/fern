@@ -186,7 +186,10 @@ class API extends Singleton {
           'success' => false,
         ]);
         $reply->send();
+        // Unreachable: Reply::send() always terminates via terminate()'s exit; it never returns here.
+        // @codeCoverageIgnoreStart
         exit;
+        // @codeCoverageIgnoreEnd
       }
 
       return $isAllowed;
@@ -207,7 +210,10 @@ class API extends Singleton {
         if ($this->config['useFernReply'] ?? false) {
           if ($result instanceof Reply) {
             $result->send();
+            // Unreachable: Reply::send() always terminates via terminate()'s exit; it never returns here.
+            // @codeCoverageIgnoreStart
             exit;
+            // @codeCoverageIgnoreEnd
           }
 
           throw new Exception('Invalid reply for endpoint ' . $wpRequest->get_method() . ' : ' . $wpRequest->get_route()
@@ -235,7 +241,10 @@ class API extends Singleton {
             'success' => false,
           ]);
           $reply->send();
+          // Unreachable: Reply::send() always terminates via terminate()'s exit; it never returns here.
+          // @codeCoverageIgnoreStart
           exit;
+          // @codeCoverageIgnoreEnd
         }
 
         return new WP_Error(

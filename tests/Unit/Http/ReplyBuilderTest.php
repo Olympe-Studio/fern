@@ -144,6 +144,16 @@ describe('serialization', function (): void {
       ->and($array['__timestamp'])->toBeInt();
   });
 
+  it('unserializes a non-array stored body to a string', function (): void {
+    $reply = Reply::fromArray([
+      'status' => 200,
+      'body' => 'plain-text',
+      'content_type' => 'text/html',
+    ]);
+
+    expect($reply->getBody())->toBe('plain-text');
+  });
+
   it('round-trips through toArray/fromArray', function (): void {
     $original = (new Reply(202, ['ok' => true], 'application/json'))
       ->setHeader('X-Trace', 'id')

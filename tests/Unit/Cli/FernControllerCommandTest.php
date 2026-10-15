@@ -247,6 +247,47 @@ describe('terminate branches', function (): void {
     expect(WP_CLI::$errors)->toHaveCount(1)
       ->and(WP_CLI::$errors[0])->toContain('Template file not found at');
   });
+
+  it('errors and terminates when the template file is empty', function (): void {
+    $this->cliRoot = makeCliRoot(false);
+    $templateDir = $this->cliRoot . '/fern/src/CLI/templates';
+    mkdir($templateDir, 0777, true);
+    file_put_contents($templateDir . '/Controller.php', '');
+
+    $command = new TerminatingControllerCommand();
+
+    expect(fn (): mixed => $command->create(['Empty', 'empty'], []))
+      ->toThrow(RuntimeException::class, 'terminated');
+
+    expect(WP_CLI::$errors)->toBe(['Failed to read template file.'])
+      ->and(WP_CLI::$success)->toBe([]);
+  });
+});
+
+describe('write failure branch', function (): void {
+  it('errors and returns when the controller file cannot be written', function (): void {
+    $this->cliRoot = makeCliRoot();
+    $lockedDir = $this->cliRoot . '/App/Controllers/Locked';
+    mkdir($lockedDir, 0777, true);
+    chmod($lockedDir, 0555);
+
+    $command = new FernControllerCommand();
+
+    // The unwritable directory makes file_put_contents emit a warning; swallow it
+    // so only the branch under test is asserted.
+    set_error_handler(static fn (): bool => true);
+
+    try {
+      $command->create(['Ghost', 'ghost'], ['subdir' => 'locked']);
+    } finally {
+      restore_error_handler();
+      chmod($lockedDir, 0777);
+    }
+
+    expect(WP_CLI::$errors)->toBe(['Failed to create controller file.'])
+      ->and(WP_CLI::$success)->toBe([])
+      ->and($lockedDir . '/GhostController.php')->not->toBeFile();
+  });
 });
 
 describe('page handle creation', function (): void {

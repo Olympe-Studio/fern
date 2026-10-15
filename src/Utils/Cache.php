@@ -366,7 +366,11 @@ class Cache extends Singleton {
         return 'memo_' . hash('xxh32', $callbackKey . '_' . $depsKey);
       }
 
+      // @codeCoverageIgnoreStart
+      // Unreachable: ext-hash is compiled into PHP core and cannot be disabled, so
+      // function_exists('hash') is always true; this crc32 fallback never executes.
       return 'memo_' . (string) crc32($callbackKey . '_' . $depsKey);
+      // @codeCoverageIgnoreEnd
     } catch (Exception $e) {
       throw new InvalidArgumentException(
           'Failed to generate memo key: ' . $e->getMessage(),

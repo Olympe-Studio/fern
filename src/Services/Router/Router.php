@@ -307,7 +307,10 @@ class Router extends Singleton {
       return $defaultController;
     }
 
+    // @codeCoverageIgnoreStart
+    // Unreachable: the admin viewType returns from handleAdminController() above, and every non-admin viewType returns the default controller, so this trailing return is dead.
     return null;
+    // @codeCoverageIgnoreEnd
   }
 
   /**
@@ -425,7 +428,10 @@ class Router extends Singleton {
       $reply = new Reply(400, 'Bad Request', 'text/plain');
       $reply->send();
 
+      // @codeCoverageIgnoreStart
+      // Unreachable: Reply::send() on this non-hijacked reply always exit()s (or throws) and never returns to here.
       return;
+      // @codeCoverageIgnoreEnd
     }
 
     try {

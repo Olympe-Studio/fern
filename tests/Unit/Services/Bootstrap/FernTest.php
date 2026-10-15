@@ -59,8 +59,8 @@ function injectRouterStub(bool $didPass): void {
 
 describe('getVersion', function (): void {
   it('returns the version constant', function (): void {
-    expect(Fern::getVersion())->toBe('0.1.0')
-      ->and(Fern::getVersion())->toBe(Fern::VERSION);
+    expect(Fern::getVersion())->toBe(Fern::VERSION)
+      ->toMatch('/^\d+\.\d+\.\d+/');
   });
 });
 

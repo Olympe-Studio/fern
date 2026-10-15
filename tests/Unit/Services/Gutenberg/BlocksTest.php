@@ -6,6 +6,34 @@ use Brain\Monkey\Functions;
 use Fern\Core\Config;
 use Fern\Core\Fern;
 use Fern\Core\Services\Gutenberg\Blocks;
+use Fern\Core\Services\Views\RenderingEngine;
+use Fern\Core\Services\Views\Views;
+
+/**
+ * Stream wrapper whose files "exist" (url_stat succeeds) but cannot be opened,
+ * so file_get_contents returns false. Used to drive the read-failure branches.
+ */
+if (!class_exists('FernFailingStreamWrapper')) {
+  class FernFailingStreamWrapper {
+    /** @var resource|null */
+    public $context;
+
+    public function stream_open(string $path, string $mode, int $options, ?string &$openedPath): bool {
+      return false;
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    public function url_stat(string $path, int $flags): array {
+      return [
+        'dev' => 0, 'ino' => 0, 'mode' => 0100644, 'nlink' => 0, 'uid' => 0,
+        'gid' => 0, 'rdev' => 0, 'size' => 0, 'atime' => 0, 'mtime' => 0,
+        'ctime' => 0, 'blksize' => -1, 'blocks' => -1,
+      ];
+    }
+  }
+}
 
 /**
  * Resets the cached Fern dev flag between tests.
@@ -32,6 +60,7 @@ beforeEach(function (): void {
 
 afterEach(function (): void {
   blocksResetFernDev();
+  (new ReflectionProperty(Views::class, 'engine'))->setValue(null, null);
 });
 
 describe('boot', function (): void {
@@ -161,6 +190,25 @@ describe('manifest loading', function (): void {
 
     expect(fn () => Blocks::getInstance()->getManifest())
       ->toThrow(Exception::class, 'Manifest file not found. Has Astro been built?');
+  });
+
+  it('throws when an existing manifest file cannot be read', function (): void {
+    // The manifest path reports as existing (url_stat) but cannot be opened, so
+    // file_get_contents returns false and the read-failure branch is hit.
+    stream_wrapper_register('fernfail', FernFailingStreamWrapper::class);
+
+    Functions\when('get_transient')->justReturn(false);
+    Filters\expectApplied('fern:gutenberg:manifest_path')->andReturn('fernfail://manifest.json');
+
+    set_error_handler(static fn (): bool => true);
+
+    try {
+      expect(fn () => Blocks::getInstance()->getManifest())
+        ->toThrow(Exception::class, 'Unable to read manifest file.');
+    } finally {
+      restore_error_handler();
+      stream_wrapper_unregister('fernfail');
+    }
   });
 });
 
@@ -392,6 +440,25 @@ describe('registerBlocks', function (): void {
 
     Blocks::getInstance()->registerBlocks();
   });
+
+  it('skips registration when an existing block.json cannot be read', function (): void {
+    // The block.json path resolves through a stream wrapper that reports the
+    // file as existing but refuses to open it, so file_get_contents === false.
+    stream_wrapper_register('fernfail', FernFailingStreamWrapper::class);
+
+    Functions\expect('register_block_type')->never();
+
+    $method = new ReflectionMethod(Blocks::getInstance(), 'registerBlockPath');
+
+    set_error_handler(static fn (): bool => true);
+
+    try {
+      $method->invoke(Blocks::getInstance(), 'fernfail://block-dir');
+    } finally {
+      restore_error_handler();
+      stream_wrapper_unregister('fernfail');
+    }
+  });
 });
 
 describe('renderBlock', function (): void {
@@ -436,5 +503,23 @@ describe('renderBlock', function (): void {
     ob_get_clean();
 
     expect($capturedData)->toBe(['fields' => ['existing' => 1, 'injected' => true]]);
+  });
+
+  it('renders via Views when the override filter does not return a string', function (): void {
+    $engine = Mockery::mock(RenderingEngine::class);
+    $engine->shouldReceive('render')->once()->andReturn('<rendered>');
+    (new ReflectionProperty(Views::class, 'engine'))->setValue(null, $engine);
+
+    Filters\expectApplied('fern:gutenberg:pre_render_block')->andReturn([]);
+    Filters\expectApplied('fern:gutenberg:render_block_view')->andReturnUsing(fn ($v) => $v);
+    Filters\expectApplied('fern:gutenberg:render_block_override')->andReturn(null);
+    Filters\expectApplied('fern:gutenberg:render_block_data')->andReturnUsing(fn ($d) => $d);
+    Filters\expectApplied('fern:gutenberg:render_block_html')->andReturnUsing(fn ($h) => $h);
+
+    ob_start();
+    Blocks::renderBlock(['name' => 'acf/hero', 'data' => ['heading' => 'Hi']]);
+    $output = ob_get_clean();
+
+    expect($output)->toBe('<rendered>');
   });
 });

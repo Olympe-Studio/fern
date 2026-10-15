@@ -32,9 +32,13 @@ class Helmet extends Singleton {
       return null;
     }
 
+    // @codeCoverageIgnoreStart
+    // Defensive: resolvePlugin() only returns false or a slug that is a MAP key,
+    // so this guard is unreachable today; it protects against future detection/MAP drift.
     if (!isset(self::MAP[$plugin])) {
       return null;
     }
+    // @codeCoverageIgnoreEnd
 
     return self::MAP[$plugin]::getHelmet();
   }

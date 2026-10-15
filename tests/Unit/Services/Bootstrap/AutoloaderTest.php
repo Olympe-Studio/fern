@@ -240,6 +240,43 @@ describe('loadController', function (): void {
     expect(Autoloader::loadController(Singleton::class))->toBeTrue();
   });
 
+  it('loads a controller from the registry when its file path exists', function (): void {
+    $this->autoloaderRoot = makeAutoloaderRoot();
+    $devProp = new ReflectionProperty(\Fern\Core\Fern::class, 'isDev');
+    $devProp->setValue(null, false);
+    Functions\when('wp_mkdir_p')->justReturn(true);
+
+    // Build the resolver first so its constructor cannot wipe the registry we inject.
+    \Fern\Core\Services\Controller\ControllerResolver::getInstance();
+
+    $suffix = substr(md5(uniqid('', true)), 0, 8);
+    $shortClass = 'RegistryLoaded' . $suffix;
+    $fqcn = 'App\\Controllers\\' . $shortClass;
+    $filePath = writeFile(
+      $this->autoloaderRoot,
+      'App/Controllers/' . $shortClass . '.php',
+      "<?php\nnamespace App\\Controllers;\nclass {$shortClass} {}\n",
+    );
+
+    $registryProp = new ReflectionProperty(
+      \Fern\Core\Services\Controller\ControllerResolver::class,
+      'controllerRegistry',
+    );
+    $registryProp->setValue(null, [
+      $fqcn => [
+        'type' => 'view',
+        'handle' => 'reg',
+        'traits' => [],
+        'actions' => [],
+        'file_path' => $filePath,
+        'file_mtime' => 0,
+      ],
+    ]);
+
+    expect(Autoloader::loadController($fqcn))->toBeTrue()
+      ->and(class_exists($fqcn, false))->toBeTrue();
+  });
+
   it('loads a controller by convention when not in the registry', function (): void {
     $this->autoloaderRoot = makeAutoloaderRoot();
     $devProp = new ReflectionProperty(\Fern\Core\Fern::class, 'isDev');

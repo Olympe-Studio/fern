@@ -204,3 +204,64 @@ describe('filter callbacks', function (): void {
     ]);
   });
 });
+
+describe('custom size defensive branches', function (): void {
+  it('addCustomImageSizes does nothing when custom_sizes is not an array', function (): void {
+    Functions\expect('add_image_size')->never();
+
+    makeImages(['settings' => ['custom_sizes' => 'nope']])->addCustomImageSizes();
+  });
+
+  it('addCustomImageSizes throws when a size entry lacks width or height', function (): void {
+    $images = makeImages([]);
+    (new ReflectionProperty($images, 'config'))->setValue($images, [
+      'disabled' => false,
+      'settings' => ['custom_sizes' => ['bad' => ['width' => 1]]],
+    ]);
+
+    expect(fn () => $images->addCustomImageSizes())
+      ->toThrow(InvalidArgumentException::class, "Invalid custom size configuration for 'bad'");
+  });
+
+  it('addCustomImageSizesToEditor returns the sizes untouched when custom_sizes is not an array', function (): void {
+    $result = makeImages(['settings' => ['custom_sizes' => 'nope']])
+      ->addCustomImageSizesToEditor(['full' => 'Full Size']);
+
+    expect($result)->toBe(['full' => 'Full Size']);
+  });
+
+  it('addCustomImageSizesToEditor throws when a size entry lacks width or height', function (): void {
+    $images = makeImages([]);
+    (new ReflectionProperty($images, 'config'))->setValue($images, [
+      'disabled' => false,
+      'settings' => ['custom_sizes' => ['bad' => ['height' => 2]]],
+    ]);
+
+    expect(fn () => $images->addCustomImageSizesToEditor([]))
+      ->toThrow(InvalidArgumentException::class, "Invalid custom size configuration for 'bad'");
+  });
+});
+
+describe('setupCustomImageSizes', function (): void {
+  it('registers the after_setup_theme and editor hooks when custom sizes are configured', function (): void {
+    $images = makeImages([]);
+    (new ReflectionProperty($images, 'config'))->setValue($images, [
+      'disabled' => false,
+      'settings' => ['custom_sizes' => ['hero' => ['width' => 1, 'height' => 1]]],
+    ]);
+
+    Actions\expectAdded('after_setup_theme')->once();
+    Filters\expectAdded('image_size_names_choose')->once();
+
+    (new ReflectionMethod($images, 'setupCustomImageSizes'))->invoke($images);
+  });
+
+  it('registers no custom-size hooks when no custom sizes are configured', function (): void {
+    $images = makeImages([]);
+
+    Actions\expectAdded('after_setup_theme')->never();
+    Filters\expectAdded('image_size_names_choose')->never();
+
+    (new ReflectionMethod($images, 'setupCustomImageSizes'))->invoke($images);
+  });
+});

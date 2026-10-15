@@ -2,6 +2,7 @@
 
 use Brain\Monkey\Actions;
 use Brain\Monkey\Functions;
+use Fern\Core\Services\HTTP\Reply;
 use Fern\Core\Services\REST\API;
 
 if (!class_exists('WP_REST_Request')) {
@@ -104,6 +105,13 @@ describe('route registration', function (): void {
       ->toThrow(InvalidArgumentException::class, 'Route collision: GET:dup');
   });
 
+  it('rejects an unsupported HTTP method', function (): void {
+    $addRoute = new ReflectionMethod(API::class, 'addRoute');
+
+    expect(fn () => $addRoute->invoke(null, 'OPTIONS', '/x', fn (): int => 1, null))
+      ->toThrow(InvalidArgumentException::class, 'Invalid method: OPTIONS');
+  });
+
   it('registers every verb against register_rest_route under the namespaced base', function (string $verb, string $method): void {
     API::config(['namespace' => 'shop', 'version' => '2']);
     API::{$verb}('/things', fn (): int => 1);
@@ -183,6 +191,81 @@ describe('permission callback', function (): void {
   });
 });
 
+describe('fern reply termination (useFernReply on)', function (): void {
+  beforeEach(function (): void {
+    // These stubs let Reply::send() run through to its emitted body and then
+    // throw at the fern:core:reply:has_been_sent action -- the final step before
+    // its terminate()/exit -- so the send() path is observed and asserted without
+    // terminating the test runner.
+    Functions\when('getallheaders')->justReturn([]);
+    Functions\when('get_home_url')->justReturn('https://example.test');
+    Functions\when('untrailingslashit')->alias(fn (string $v): string => rtrim($v, '/'));
+    Functions\when('get_the_ID')->justReturn(false);
+    Functions\when('get_queried_object')->justReturn(null);
+    Functions\when('get_queried_object_id')->justReturn(0);
+    Functions\when('get_option')->justReturn('UTF-8');
+    Functions\when('status_header')->justReturn(true);
+    Functions\when('apply_filters')->alias(static fn (string $tag, mixed $value = null): mixed => $value);
+    Functions\when('do_action')->alias(static function (): void {
+      throw new RuntimeException('__reply_sent__');
+    });
+  });
+
+  it('emits a 403 fern reply when permission is denied and useFernReply is on', function (): void {
+    API::config(['useFernReply' => true]);
+    API::get('/locked', fn (): int => 1, fn (): bool => false);
+
+    $permission = fernRestPermissionCallback();
+
+    ob_start();
+
+    try {
+      $permission(new WP_REST_Request());
+    } catch (Throwable) {
+      // Reply::send() reached the has_been_sent action, immediately before exit().
+    }
+    $output = (string) ob_get_clean();
+
+    expect($output)->toContain('Forbidden')->toContain('403');
+  });
+
+  it('sends the reply the handler returns when useFernReply is on', function (): void {
+    API::config(['useFernReply' => true]);
+    API::get('/reply', fn (): Reply => new Reply(200, ['handled' => true]));
+
+    $callback = fernRestCallback();
+
+    ob_start();
+
+    try {
+      $callback(new WP_REST_Request('GET', '/fern/v1/reply'));
+    } catch (Throwable) {
+      // Reply::send() reached the has_been_sent action, immediately before exit().
+    }
+    $output = (string) ob_get_clean();
+
+    expect($output)->toContain('handled');
+  });
+
+  it('emits a 500 fern reply when the handler returns a non-reply and useFernReply is on', function (): void {
+    API::config(['useFernReply' => true]);
+    API::get('/bad', fn (): array => ['not' => 'a reply']);
+
+    $callback = fernRestCallback();
+
+    ob_start();
+
+    try {
+      $callback(new WP_REST_Request('GET', '/fern/v1/bad'));
+    } catch (Throwable) {
+      // The "Invalid reply" exception is caught, logged, and the 500 reply is sent.
+    }
+    $output = (string) ob_get_clean();
+
+    expect($output)->toContain('Internal server error.')->toContain('500');
+  });
+});
+
 describe('callback execution', function (): void {
   beforeEach(function (): void {
     Functions\when('getallheaders')->justReturn([]);
@@ -205,6 +288,22 @@ describe('callback execution', function (): void {
       ->and($response->data)->toBe(['ok' => true]);
   });
 
+  it('builds the error id from uniqid when wp_generate_uuid4 is unavailable', function (): void {
+    // wp_generate_uuid4 is intentionally left unstubbed so createErrorId() takes
+    // its uniqid() fallback branch.
+    API::config(['useFernReply' => false]);
+    API::get('/no-uuid', function (): void {
+      throw new RuntimeException('handler failed');
+    });
+
+    $callback = fernRestCallback();
+    $result = $callback(new WP_REST_Request('GET', '/fern/v1/no-uuid'));
+
+    expect($result)->toBeInstanceOf(WP_Error::class)
+      ->and($result->get_error_code())->toBe('rest_error')
+      ->and($result->get_error_message())->toBe('Internal server error.');
+  });
+
   it('returns a WP_Error and logs when the handler throws and useFernReply is off', function (): void {
     Functions\when('wp_generate_uuid4')->justReturn('uuid-1234');
 
@@ -221,12 +320,3 @@ describe('callback execution', function (): void {
       ->and($result->get_error_message())->toBe('Internal server error.');
   });
 });
-
-/*
- * The useFernReply === true branches of createCallback() and
- * wrapPermissionCallback() are intentionally left uncovered: they call
- * Reply::send() (which invokes the internal headers_sent() that Brain Monkey /
- * Patchwork cannot redefine) and then exit, so they cannot be exercised without
- * modifying the shared bootstrap. The equivalent logic is covered through the
- * useFernReply === false paths above.
- */

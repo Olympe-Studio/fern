@@ -4,6 +4,15 @@ use Brain\Monkey\Filters;
 use Brain\Monkey\Functions;
 use Fern\Core\Services\Views\Engines\Remote;
 
+/*
+ * The encode-failure branch of Remote::render is reached by forcing
+ * JSON::encode to return false. The Fern\Core\Utils\json_encode pass-through
+ * shim (tests/fern-utils-shims.php) honours the toggle set below.
+ */
+afterEach(function (): void {
+  unset($GLOBALS['__fern_force_json_encode_false']);
+});
+
 function makeRemote(array $overrides = []): Remote {
   return new Remote([
     'protocol' => 'https',
@@ -132,6 +141,18 @@ describe('render success', function (): void {
 });
 
 describe('render failure', function (): void {
+  it('throws when the payload cannot be JSON encoded', function (): void {
+    $GLOBALS['__fern_force_json_encode_false'] = true;
+
+    Functions\expect('wp_remote_post')->never();
+    Functions\expect('wp_remote_retrieve_body')->never();
+
+    $engine = makeRemote();
+
+    expect(fn (): string => $engine->render('home', ['x' => 1]))
+      ->toThrow(InvalidArgumentException::class, 'Failed to encode data to JSON');
+  });
+
   it('throws when wp_remote_post returns a WP_Error', function (): void {
     Functions\expect('wp_remote_post')
       ->once()
