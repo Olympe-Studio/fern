@@ -469,6 +469,10 @@ class Router extends Singleton {
       if ($reply instanceof Reply) {
         $reply->send();
       }
+    } catch (ActionNotFoundException) {
+      // A client mistake, or a scanner probing action names: not a server error to log.
+      $reply = new Reply(404, 'Not Found', 'text/plain');
+      $reply->send();
     } catch (Throwable $e) {
       $errorId = $this->createErrorId('router_action');
       Logger::error('Router action execution failed', [
