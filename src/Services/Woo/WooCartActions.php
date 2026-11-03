@@ -19,6 +19,8 @@ use WC_Product_Variable;
 /**
  * Helper actions for Woo cart manipulation.
  *
+ * @phpstan-type CartLine array{product_id: int, quantity: int, variation_id: int, variation: array<mixed>}
+ *
  * @phpstan-ignore-next-line trait.unused This trait may be consumed dynamically in application code.
  */
 trait WooCartActions {
@@ -73,80 +75,23 @@ trait WooCartActions {
   }
 
   /**
-   * Add a product to cart
+   * Add a product to cart, or replace the line `cart_item_key` points to.
+   *
+   * When WooCommerce refuses the product, replies 400 with its reason as plain text in
+   * `message` and a stable `code`: invalid_quantity, variation_required, not_purchasable,
+   * out_of_stock, insufficient_stock or add_failed.
    */
   public function addToCart(Request $request): Reply {
     $action = $request->getAction();
-    $productId = (int) $action->get('product_id');
-    $quantity = (int) ($action->get('quantity') ?? 1);
-    $variationId = (int) ($action->get('variation_id') ?? 0);
-    $variation = $action->get('variation') ?? [];
-    $cartItemKey = $action->get('cart_item_key');
+    $line = $this->cartLineArgs([
+      'product_id' => $action->get('product_id'),
+      'quantity' => $action->get('quantity'),
+      'variation_id' => $action->get('variation_id'),
+      'variation' => $action->get('variation'),
+    ]);
 
     try {
-      $product = Types::getSafeWpValue(wc_get_product($productId));
-      $cart = $this->getCart();
-
-      if ($product === null) {
-        throw new Exception('Product not found');
-      }
-
-      $oldIndex = false;
-      $oldPosition = null;
-      if ($cartItemKey) {
-        $cartItem = Types::getSafeWpValue($cart->get_cart_item($cartItemKey));
-
-        if ($cartItem === null) {
-          throw new Exception('Cart item not found');
-        }
-
-        $oldIndex = array_search($cartItemKey, array_keys($cart->get_cart()), true);
-        $oldPosition = $cartItem['position'] ?? null;
-        $cart->remove_cart_item($cartItemKey);
-      }
-
-      // Make sure all existing items already have a valid position so that the
-      // next position we compute for the new item is actually greater than
-      // every other one.
-      $this->ensureCartPositions($cart);
-
-      // Add the new/modified item
-      $newKey = $cart->add_to_cart(
-        $productId,
-        $quantity,
-        $variationId,
-        $variation,
-      );
-
-      if ($newKey) {
-        // Store the insertion order for stable sorting
-        if ($cartItemKey && $oldPosition !== null) {
-          // Preserve position when modifying existing item
-          $cart->cart_contents[$newKey]['position'] = $oldPosition;
-        } else {
-          // Assign new position for new items
-          $cart->cart_contents[$newKey]['position'] = $this->getNextCartPosition($cart);
-        }
-      }
-
-      if ($cartItemKey && $newKey && $oldIndex !== false) {
-        $this->repositionCartItem($cart, $newKey, $oldIndex);
-      }
-
-      if (!$newKey) {
-        throw new Exception(
-          $product->is_type('variable')
-            ? 'Failed to add variation to cart'
-            : 'Failed to add product to cart',
-        );
-      }
-
-      return new Reply(200, [
-        'success' => true,
-        'message' => $cartItemKey ? 'Cart item modified' : 'Item added to cart',
-        'cart_item_key' => $newKey,
-        'cart' => $this->formatCartData(),
-      ]);
+      return $this->addOrReplaceCartLine($line, Types::getSafeString($action->get('cart_item_key')));
     } catch (Exception $e) {
       return new Reply(400, [
         'success' => false,
@@ -157,6 +102,9 @@ trait WooCartActions {
 
   /**
    * Add multiple products to cart in batch
+   *
+   * Each refused item gets WooCommerce's reason in its result `message` and a stable
+   * `code`, as addToCart() replies them.
    *
    * @param Request $request Contains array of items with product_id, quantity, variation_id, variation
    * @return Reply Response with success status and batch operation results
@@ -604,7 +552,7 @@ trait WooCartActions {
           'short_description' => Types::getSafeString($product->get_short_description('edit')),
           'quantity' => Types::getSafeInt($cart_item['quantity'] ?? 1),
           'sku' => Types::getSafeString($product->get_sku() ?: ''),
-          'position' => $cart_item['position'],
+          'position' => $cart_item['position'] ?? null,
           'price' => [
             'regular_price' => Utils::formatPrice(Types::getSafeFloat($regular_price)),
             'sale_price' => $product->get_sale_price() ? Utils::formatPrice($sale_price) : null,
@@ -615,7 +563,7 @@ trait WooCartActions {
           ],
           'subtotal' => Utils::formatPrice(Types::getSafeFloat($cart_item['line_subtotal'] ?? 0)),
           'total' => Utils::formatPrice(Types::getSafeFloat($cart_item['line_total'] ?? 0)),
-          'true_total' => Utils::formatPrice(Types::getSafeFloat($cart_item['line_total'] + $cart_item['line_tax'] ?? 0)),
+          'true_total' => Utils::formatPrice(Types::getSafeFloat($cart_item['line_total'] ?? 0) + Types::getSafeFloat($cart_item['line_tax'] ?? 0)),
           'image' => $this->getProductImage($product),
           'meta_data' => Filters::apply('fern:woo:cart_item_meta_data', [], $product, $cart_item),
         ];
@@ -847,72 +795,294 @@ trait WooCartActions {
   /**
    * Process batch items for cart addition
    *
-   * @param array $items Array of items to add to cart
-   * @return array Results of batch processing
+   * Positions are persisted once every line is in: WooCommerce writes the cart to the
+   * session while adding a line, before the line gets its position.
+   *
+   * @param array<mixed> $items Array of items to add to cart
+   *
+   * @return list<array<string, mixed>> Results of batch processing
    */
   private function processBatchItems(array $items): array {
-    $results = [];
     $cart = $this->getCart();
+    $this->ensureCartPositions($cart);
+    $results = [];
 
     foreach ($items as $index => $item) {
-      try {
-        $result = $this->processSingleBatchItem($item, $cart);
-        $results[] = array_merge(['index' => $index], $result);
-      } catch (Exception $e) {
-        $results[] = [
-          'index' => $index,
-          'success' => false,
-          'message' => $e->getMessage(),
-          'cart_item_key' => null,
-        ];
-      }
+      $results[] = ['index' => $index] + $this->tryBatchItem(is_array($item) ? $item : [], $cart);
     }
+
+    $this->ensureCartPositions($cart);
 
     return $results;
   }
 
   /**
+   * Process a single batch item, turning an exception into a failed result
+   *
+   * @param array<mixed> $item Item data with product_id, quantity, etc.
+   *
+   * @return array<string, mixed>
+   */
+  private function tryBatchItem(array $item, WC_Cart $cart): array {
+    try {
+      return $this->processSingleBatchItem($item, $cart);
+    } catch (Exception $e) {
+      return [
+        'success' => false,
+        'message' => $e->getMessage(),
+        'cart_item_key' => null,
+      ];
+    }
+  }
+
+  /**
    * Process a single item in batch operation
    *
-   * @param array $item Item data with product_id, quantity, etc.
-   * @param WC_Cart $cart WooCommerce cart instance
-   * @return array Processing result for the item
+   * @param array<mixed> $item Item data with product_id, quantity, etc.
+   * @param WC_Cart      $cart WooCommerce cart instance
+   *
+   * @return array<string, mixed> Processing result for the item, with `code` when WooCommerce refused it
+   *
+   * @throws Exception When the product ID is invalid or the product does not exist
    */
   private function processSingleBatchItem(array $item, WC_Cart $cart): array {
-    $productId = (int) ($item['product_id'] ?? 0);
-    $quantity = (int) ($item['quantity'] ?? 1);
-    $variationId = (int) ($item['variation_id'] ?? 0);
-    $variation = $item['variation'] ?? [];
+    $line = $this->cartLineArgs($item);
 
-    if ($productId <= 0) {
+    if ($line['product_id'] <= 0) {
       throw new Exception('Invalid product ID');
     }
 
-    $product = Types::getSafeWpValue(wc_get_product($productId));
+    $product = $this->findProduct($line['product_id']);
+    $noticeCount = count($this->errorNotices());
+    $newKey = $this->addCartLine($cart, $line);
 
-    if ($product === null) {
-      throw new Exception('Product not found');
+    if ($newKey === null) {
+      return ['success' => false] + $this->addFailure($cart, $product, $line, $noticeCount) + ['cart_item_key' => null];
     }
 
-    $newKey = $cart->add_to_cart($productId, $quantity, $variationId, $variation);
-
-    if ($newKey) {
-      $cart->cart_contents[$newKey]['position'] = $this->getNextCartPosition($cart);
-    }
-
-    if (!$newKey) {
-      throw new Exception(
-        $product->is_type('variable')
-          ? 'Failed to add variation to cart'
-          : 'Failed to add product to cart'
-      );
-    }
+    $this->setLinePosition($cart, $newKey, $this->getNextCartPosition($cart));
 
     return [
       'success' => true,
       'message' => 'Item added to cart',
       'cart_item_key' => $newKey,
     ];
+  }
+
+  /**
+   * Normalize the arguments of a cart line
+   *
+   * @param array<mixed> $args Raw product_id, quantity, variation_id and variation
+   *
+   * @return CartLine
+   */
+  private function cartLineArgs(array $args): array {
+    $variation = $args['variation'] ?? [];
+
+    return [
+      'product_id' => Types::getSafeInt($args['product_id'] ?? 0),
+      'quantity' => Types::getSafeInt($args['quantity'] ?? 1),
+      'variation_id' => Types::getSafeInt($args['variation_id'] ?? 0),
+      'variation' => is_array($variation) ? $variation : [],
+    ];
+  }
+
+  /**
+   * Get a product or fail
+   *
+   * @throws Exception When the product does not exist
+   */
+  private function findProduct(int $productId): WC_Product {
+    $product = Types::getSafeWpValue(wc_get_product($productId));
+
+    if (!$product instanceof WC_Product) {
+      throw new Exception('Product not found');
+    }
+
+    return $product;
+  }
+
+  /**
+   * Add a line or replace the one `cart_item_key` points to, keeping its place
+   *
+   * @param CartLine $line
+   *
+   * @throws Exception When the product or the replaced line does not exist
+   */
+  private function addOrReplaceCartLine(array $line, string $cartItemKey): Reply {
+    $product = $this->findProduct($line['product_id']);
+    $cart = $this->getCart();
+    $previous = $cartItemKey !== '' ? $this->takeCartLine($cart, $cartItemKey) : null;
+    $this->ensureCartPositions($cart);
+    $noticeCount = count($this->errorNotices());
+    $newKey = $this->addCartLine($cart, $line);
+
+    if ($newKey === null) {
+      if ($previous !== null) {
+        $cart->restore_cart_item($cartItemKey);
+      }
+
+      return new Reply(400, ['success' => false] + $this->addFailure($cart, $product, $line, $noticeCount));
+    }
+
+    $this->placeCartLine($cart, $newKey, $previous);
+
+    return new Reply(200, [
+      'success' => true,
+      'message' => $previous !== null ? 'Cart item modified' : 'Item added to cart',
+      'cart_item_key' => $newKey,
+      'cart' => $this->formatCartData(),
+    ]);
+  }
+
+  /**
+   * Remove the line being replaced and remember where it stood
+   *
+   * @return array{index: int|false, position: mixed}
+   *
+   * @throws Exception When the cart has no such line
+   */
+  private function takeCartLine(WC_Cart $cart, string $cartItemKey): array {
+    $cartItem = Types::getSafeWpValue($cart->get_cart_item($cartItemKey));
+
+    if ($cartItem === null) {
+      throw new Exception('Cart item not found');
+    }
+
+    $index = array_search($cartItemKey, array_keys($cart->get_cart()), true);
+    $cart->remove_cart_item($cartItemKey);
+
+    return ['index' => $index, 'position' => $cartItem['position'] ?? null];
+  }
+
+  /**
+   * Give a new line its position, back where the replaced line stood, and persist it
+   *
+   * @param array{index: int|false, position: mixed}|null $previous The replaced line, if any
+   */
+  private function placeCartLine(WC_Cart $cart, string $newKey, ?array $previous): void {
+    $this->setLinePosition($cart, $newKey, $previous['position'] ?? $this->getNextCartPosition($cart));
+
+    if ($previous !== null && $previous['index'] !== false) {
+      $this->repositionCartItem($cart, $newKey, $previous['index']);
+    }
+
+    $this->ensureCartPositions($cart);
+  }
+
+  /**
+   * Store the position of a cart line
+   */
+  private function setLinePosition(WC_Cart $cart, string $key, mixed $position): void {
+    $line = $cart->cart_contents[$key] ?? [];
+    $cart->cart_contents[$key] = array_merge(is_array($line) ? $line : [], ['position' => $position]);
+  }
+
+  /**
+   * Add a line through WooCommerce
+   *
+   * @param CartLine $line
+   *
+   * @return string|null The cart item key, null when WooCommerce refused the line
+   */
+  private function addCartLine(WC_Cart $cart, array $line): ?string {
+    $key = $cart->add_to_cart($line['product_id'], $line['quantity'], $line['variation_id'], $line['variation']);
+
+    return is_string($key) && $key !== '' ? $key : null;
+  }
+
+  /**
+   * Why WooCommerce refused a line: the error notice it queued, as plain text, and a stable code
+   *
+   * The error notices this line queued are removed afterwards so they do not pile up in the session;
+   * notices queued before it are kept.
+   *
+   * @param CartLine $line
+   * @param int      $noticeCount Number of error notices queued before the line was added
+   *
+   * @return array{message: string, code: string}
+   */
+  private function addFailure(WC_Cart $cart, WC_Product $product, array $line, int $noticeCount): array {
+    $notices = array_slice($this->errorNotices(), $noticeCount);
+    $message = $this->noticeText(end($notices));
+    $failure = [
+      'message' => $message !== '' ? $message : $this->addFallbackMessage($product),
+      'code' => $this->addFailureCode($cart, $line),
+    ];
+
+    $this->dropErrorNoticesSince($noticeCount);
+
+    return $failure;
+  }
+
+  /**
+   * Remove the error notices queued after the first $noticeCount, keeping every earlier notice of any type
+   */
+  private function dropErrorNoticesSince(int $noticeCount): void {
+    if (!function_exists('wc_get_notices') || !function_exists('wc_set_notices')) {
+      return;
+    }
+
+    $notices = Types::getSafeArray(wc_get_notices());
+    $notices['error'] = array_slice(Types::getSafeArray($notices['error'] ?? []), 0, $noticeCount);
+    wc_set_notices($notices);
+  }
+
+  /**
+   * Machine-readable reason of a refused line, following the checks of WC_Cart::add_to_cart()
+   *
+   * One of invalid_quantity, variation_required, not_purchasable, out_of_stock,
+   * insufficient_stock or add_failed.
+   *
+   * @param CartLine $line
+   */
+  private function addFailureCode(WC_Cart $cart, array $line): string {
+    $product = Types::getSafeWpValue(wc_get_product($line['variation_id'] > 0 ? $line['variation_id'] : $line['product_id']));
+
+    return match (true) {
+      $line['quantity'] <= 0 => 'invalid_quantity',
+      !$product instanceof WC_Product => 'add_failed',
+      $product->is_type('variable') => 'variation_required',
+      !$product->is_purchasable() => 'not_purchasable',
+      !$product->is_in_stock() => 'out_of_stock',
+      !$product->has_enough_stock($line['quantity'] + $this->quantityInCart($cart, $product)) => 'insufficient_stock',
+      default => 'add_failed',
+    };
+  }
+
+  /**
+   * Quantity of a product's stock already in the cart
+   */
+  private function quantityInCart(WC_Cart $cart, WC_Product $product): int {
+    $quantities = Types::getSafeArray($cart->get_cart_item_quantities());
+
+    return Types::getSafeInt($quantities[$product->get_stock_managed_by_id()] ?? 0);
+  }
+
+  /**
+   * Message used when WooCommerce refused a line without a notice
+   */
+  private function addFallbackMessage(WC_Product $product): string {
+    return $product->is_type('variable') ? 'Failed to add variation to cart' : 'Failed to add product to cart';
+  }
+
+  /**
+   * Error notices WooCommerce has queued in the session
+   *
+   * @return array<int|string, mixed>
+   */
+  private function errorNotices(): array {
+    return function_exists('wc_get_notices') ? Types::getSafeArray(wc_get_notices('error')) : [];
+  }
+
+  /**
+   * A WooCommerce notice as plain text, without its "View cart" button
+   */
+  private function noticeText(mixed $notice): string {
+    $html = Types::getSafeString(is_array($notice) ? ($notice['notice'] ?? '') : $notice);
+    $html = (string) preg_replace('#<a\b[^>]*\bwc-forward\b[^>]*>.*?</a>#is', '', $html);
+
+    return trim(html_entity_decode(wp_strip_all_tags($html, true), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
   }
 
   /**
