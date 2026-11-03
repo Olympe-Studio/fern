@@ -3,7 +3,8 @@
 ## @ferndev/core
 
 ### callAction
-sig: `callAction<T>(action:str,args?:obj|FormData,nonce?:str,opts?:{timeout?:num}):Promise<{data?:T,error?:{message:str,status?:num},status:'ok'|'error'}>`
+sig: `callAction<T>(action:str,args?:obj|FormData,nonce?:str,opts?:{timeout?:num}):Promise<{data?:T,error?:{message:str,status?:num,code?:str},status:'ok'|'error'}>`
+err: non-2xx → message+code from the JSON body, message defaults to `HTTP error <status>`
 desc: Make authenticated action req to PHP controller
 params: action:str:req:method name|args:obj|FormData:opt|nonce:str:opt:CSRF token|opts.timeout:num:opt:30000ms
 ex:
@@ -40,10 +41,12 @@ ex: `await initializeCart()`
 ### addToCart
 sig: `addToCart({productId:num,quantity?:num,variationId?:num,variation?:obj,cartItemKey?:str}):Promise`
 ex: `await addToCart({productId:123,quantity:2})`
+err: `{status:'error',error:{message:str,code?:str,httpStatus?:num}}`; refused by Woo → 400, message=Woo notice as plain text, code∈out_of_stock|insufficient_stock|invalid_quantity|variation_required|not_purchasable|add_failed
 
 ### batchAddToCart
 sig: `batchAddToCart({items:arr}):Promise`
 ex: `await batchAddToCart({items:[{productId:1,quantity:2},{productId:2}]})`
+results: `[{index,success,message,code?,cart_item_key}]`; none added → status 'error' with the first refused item's reason; some added → status 'ok', check results
 
 ### updateCartItem
 sig: `updateCartItem({cartItemKey:str,quantity?:num,variationId?:num,variation?:obj}):Promise`

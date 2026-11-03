@@ -70,8 +70,9 @@ function callAction<T>(
 {
     data?: T;          // Response data on success
     error?: {
-        message: string;
+        message: string;   // Non-2xx: the JSON body's `message`, else `HTTP error <status>`
         status?: number;
+        code?: string;     // Non-2xx: the JSON body's `code`, when sent
     };                 // Error details on failure
     status: 'ok' | 'error';
 }
@@ -369,6 +370,23 @@ await addToCart({
 | `variation` | `object` | No | Variation attributes |
 | `cartItemKey` | `string` | No | Existing cart item to modify |
 
+When WooCommerce refuses the product, the result carries its reason:
+
+```typescript
+const result = await addToCart({ productId: 123 });
+
+if (result.status === 'error') {
+    // result.error.message: 'You cannot add "ML-040" to the cart because the product is out of stock.'
+    // result.error.code: 'out_of_stock'
+    // result.error.httpStatus: 400
+}
+```
+
+The `addToCart` action replies `400 { success: false, message, code }`. `message` is the
+WooCommerce error notice as plain text (the notices are then cleared). `code` is one of
+`out_of_stock`, `insufficient_stock`, `invalid_quantity`, `variation_required`,
+`not_purchasable` or `add_failed`.
+
 ### batchAddToCart
 
 Add multiple products in one request.
@@ -388,6 +406,11 @@ await batchAddToCart({
     ]
 });
 ```
+
+Each entry of `results` reports one item: `{ index, success, message, code?, cart_item_key }`.
+A refused item carries WooCommerce's reason in `message` and the same `code` as `addToCart`.
+When no item was added, the result is `status: 'error'` with the first refused item's reason.
+When only some items were refused, it stays `status: 'ok'`: check `results`.
 
 ### updateCartItem
 
@@ -659,6 +682,9 @@ The `WooCartActions` trait provides:
 - `applyCoupon` - Apply coupon
 - `removeCoupon` - Remove coupon
 
+`addToCart` and `batchAddToCart` report a product WooCommerce refused with its reason as
+`message` and a stable `code` (see [addToCart](#addtocart)).
+
 ---
 
 ## Best Practices
@@ -689,11 +715,12 @@ const isLoading = useStore($cartIsLoading);
 ### 3. Handle Errors Gracefully
 
 ```typescript
-try {
-    await addToCart({ productId: 123 });
+const result = await addToCart({ productId: 123 });
+
+if (result.status === 'error') {
+    showError(result.error.message);
+} else {
     showSuccess('Added to cart!');
-} catch (error) {
-    showError(error.message);
 }
 ```
 

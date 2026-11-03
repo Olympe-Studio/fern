@@ -1299,7 +1299,7 @@ describe('action error handling', function (): void {
     expect($capture->reply->getBody())->toContain('Internal Server Error');
   });
 
-  it('returns a 500 when the action is not registered on the controller', function (): void {
+  it('returns a 404 when the action is not registered on the controller', function (): void {
     $this->routerRoot = makeRouterRoot();
     $class = writeRouterController($this->routerRoot, 'UnknownActionCtrl', 'unknownaction');
 
@@ -1315,7 +1315,8 @@ describe('action error handling', function (): void {
     expect(fn (): mixed => invokeHandleActionRequest($router, $class))
       ->toThrow(RouterHaltSend::class);
 
-    expect($capture->reply->getBody())->toContain('Internal Server Error');
+    expect($capture->reply->getBody())->toBe('Not Found')
+      ->and((new ReflectionProperty(Reply::class, 'status'))->getValue($capture->reply))->toBe(404);
   });
 
   it('returns a 500 when the resolved action method is static', function (): void {
@@ -1345,7 +1346,7 @@ describe('action error handling', function (): void {
     expect($capture->reply->getBody())->toContain('Internal Server Error');
   });
 
-  it('returns a 500 when the can_run filter rejects the action', function (): void {
+  it('returns a 404 when the can_run filter rejects the action', function (): void {
     $this->routerRoot = makeRouterRoot();
     $class = writeRouterController($this->routerRoot, 'CanRunActionCtrl', 'canrun', ['blockedAction']);
 
@@ -1362,18 +1363,39 @@ describe('action error handling', function (): void {
     expect(fn (): mixed => invokeHandleActionRequest($router, $class))
       ->toThrow(RouterHaltSend::class);
 
-    expect($capture->reply->getBody())->toContain('Internal Server Error');
+    expect($capture->reply->getBody())->toBe('Not Found')
+      ->and((new ReflectionProperty(Reply::class, 'status'))->getValue($capture->reply))->toBe(404);
   });
 
-  // MUST be the last createErrorId test: stubbing wp_generate_uuid4 leaks a
-  // Brain Monkey function definition that would break any later createErrorId call.
-  it('returns a 500 (uuid error id) when the action name is an empty string', function (): void {
+  it('returns a 404 when the action name is an empty string', function (): void {
     $this->routerRoot = makeRouterRoot();
     $class = writeRouterController($this->routerRoot, 'EmptyNameActionCtrl', 'emptyname');
 
     $request = new RouterFakeRequest(['action' => true, 'method' => 'POST']);
     bindRouterRequest($request);
     setRouterAction($request, ''); // empty (non-null) name => reaches the guard
+
+    guardUuidLeak();
+    $capture = haltReplySend();
+
+    $router = makeRouter();
+
+    expect(fn (): mixed => invokeHandleActionRequest($router, $class))
+      ->toThrow(RouterHaltSend::class);
+
+    expect($capture->reply->getBody())->toBe('Not Found')
+      ->and((new ReflectionProperty(Reply::class, 'status'))->getValue($capture->reply))->toBe(404);
+  });
+
+  // MUST be the last createErrorId test: stubbing wp_generate_uuid4 leaks a
+  // Brain Monkey function definition that would break any later createErrorId call.
+  it('returns a 500 (uuid error id) when the action name is a magic method', function (): void {
+    $this->routerRoot = makeRouterRoot();
+    $class = writeRouterController($this->routerRoot, 'MagicNameActionCtrl', 'magicname');
+
+    $request = new RouterFakeRequest(['action' => true, 'method' => 'POST']);
+    bindRouterRequest($request);
+    setRouterAction($request, '__construct');
 
     Functions\when('wp_generate_uuid4')->justReturn('abcd-uuid');
 
