@@ -90,6 +90,51 @@ function stubWcWithCart(Mockery\MockInterface $cart): Mockery\MockInterface {
   $wc->cart = $cart;
   $wc->session = Mockery::mock();
   Functions\when('WC')->justReturn($wc);
+  stubWooNotices();
+
+  return $cart;
+}
+
+/**
+ * Stubs the WooCommerce notice store with a list the test can grow by
+ * reference, the way WC_Cart::add_to_cart() queues an error notice.
+ *
+ * @param array<int, array{notice: string, data: array<mixed>}> $notices
+ */
+function stubWooNotices(array &$notices = []): void {
+  Functions\when('wc_get_notices')->alias(static function (string $type = '') use (&$notices): array {
+    return $type === 'error' ? $notices : ['error' => $notices];
+  });
+  Functions\when('wc_set_notices')->alias(static function (array $all) use (&$notices): void {
+    $notices = $all['error'] ?? [];
+  });
+  Functions\when('wp_strip_all_tags')->alias(
+    static fn (string $text, bool $removeBreaks = false): string => trim((string) preg_replace('/[\r\n\t ]+/', ' ', strip_tags($text))),
+  );
+}
+
+/**
+ * Builds a cart whose get_cart() reflects its live contents, whose add_to_cart()
+ * writes the session before returning (as WooCommerce's calculate_totals hook
+ * does) and whose set_session() records each persisted snapshot.
+ *
+ * @param array<string, mixed> $contents
+ * @param list<array<string, mixed>> $sessions
+ */
+function sessionCart(array $contents, array &$sessions): Mockery\MockInterface {
+  $cart = Mockery::mock('WC_Cart, ' . WooCartWithSession::class);
+  $cart->cart_contents = $contents;
+  $cart->shouldReceive('get_cart')->andReturnUsing(static fn (): array => $cart->cart_contents);
+  $cart->shouldReceive('set_session')->andReturnUsing(static function () use ($cart, &$sessions): void {
+    $sessions[] = $cart->cart_contents;
+  });
+  $cart->shouldReceive('add_to_cart')->andReturnUsing(static function (int $productId) use ($cart): string {
+    $key = 'k' . $productId;
+    $cart->cart_contents[$key] = ['product_id' => $productId, 'quantity' => 1];
+    $cart->set_session();
+
+    return $key;
+  });
 
   return $cart;
 }
@@ -486,7 +531,53 @@ describe('addToCart', function (): void {
     $reply = cartHost()->addToCart(wooMakeRequest(['product_id' => 42]));
 
     expect($reply->getBody()['success'])->toBeFalse()
-      ->and($reply->getBody()['message'])->toBe('Failed to add variation to cart');
+      ->and($reply->getBody()['message'])->toBe('Failed to add variation to cart')
+      ->and($reply->getBody()['code'])->toBe('variation_required');
+  });
+
+  it('replies 400 with the notice WooCommerce queued, as plain text, and drops only that notice', function (): void {
+    $notices = [['notice' => 'An older notice', 'data' => []]];
+    $cart = emptyCalculableCart();
+    stubWcWithCart($cart);
+    stubWooNotices($notices);
+    $cart->shouldReceive('add_to_cart')->andReturnUsing(static function () use (&$notices): bool {
+      $notices[] = ['notice' => 'You cannot add &quot;ML-040&quot; to the cart because the product is out of stock.', 'data' => []];
+
+      return false;
+    });
+
+    $product = Mockery::mock('WC_Product');
+    $product->shouldReceive('is_type')->andReturn(false);
+    $product->shouldReceive('is_purchasable')->andReturn(true);
+    $product->shouldReceive('is_in_stock')->andReturn(false);
+    Functions\when('wc_get_product')->justReturn($product);
+
+    $reply = cartHost()->addToCart(wooMakeRequest(['product_id' => 42]));
+
+    expect($reply->toArray()['status'])->toBe(400)
+      ->and($reply->getBody())->toBe([
+        'success' => false,
+        'message' => 'You cannot add "ML-040" to the cart because the product is out of stock.',
+        'code' => 'out_of_stock',
+      ])
+      ->and($notices)->toBe([['notice' => 'An older notice', 'data' => []]]);
+  });
+
+  it('falls back to a generic message when WooCommerce refused the line silently', function (): void {
+    $notices = [['notice' => 'An older notice', 'data' => []]];
+    $cart = emptyCalculableCart();
+    $cart->shouldReceive('add_to_cart')->andReturn(false);
+    stubWcWithCart($cart);
+    stubWooNotices($notices);
+
+    $product = Mockery::mock('WC_Product');
+    $product->shouldReceive('is_type')->andReturn(false);
+    Functions\when('wc_get_product')->justReturn($product);
+
+    $reply = cartHost()->addToCart(wooMakeRequest(['product_id' => 42, 'quantity' => 0]));
+
+    expect($reply->getBody()['message'])->toBe('Failed to add product to cart')
+      ->and($reply->getBody()['code'])->toBe('invalid_quantity');
   });
 
   it('replies 400 when the referenced cart item is missing', function (): void {
@@ -529,6 +620,28 @@ describe('addToCart', function (): void {
       ->and($body['message'])->toBe('Cart item modified')
       ->and($body['cart_item_key'])->toBe('newkey')
       ->and($cart->cart_contents['newkey']['position'])->toBe(2.0);
+  });
+
+  it('restores the line it replaced when WooCommerce refuses the new quantity', function (): void {
+    $cart = calculableCartWith(['abc' => ['position' => 2.0]]);
+    $cart->shouldReceive('get_cart_item')->with('abc')->andReturn(['position' => 2.0]);
+    $cart->shouldReceive('remove_cart_item')->with('abc');
+    $cart->shouldReceive('add_to_cart')->andReturn(false);
+    $cart->shouldReceive('restore_cart_item')->once()->with('abc')->andReturn(true);
+    stubWcWithCart($cart);
+
+    $product = Mockery::mock('WC_Product');
+    $product->shouldReceive('is_type')->andReturn(false);
+    Functions\when('wc_get_product')->justReturn($product);
+
+    $reply = cartHost()->addToCart(wooMakeRequest([
+      'product_id' => 42,
+      'quantity' => 0,
+      'cart_item_key' => 'abc',
+    ]));
+
+    expect($reply->toArray()['status'])->toBe(400)
+      ->and($reply->getBody()['code'])->toBe('invalid_quantity');
   });
 });
 
@@ -599,7 +712,77 @@ describe('batchAddToCart', function (): void {
     $body = $reply->getBody();
 
     expect($body['results'][0]['success'])->toBeFalse()
-      ->and($body['results'][0]['message'])->toBe('Failed to add variation to cart');
+      ->and($body['results'][0]['message'])->toBe('Failed to add variation to cart')
+      ->and($body['results'][0]['code'])->toBe('variation_required');
+  });
+
+  it('reports the reason WooCommerce gave for each refused item', function (): void {
+    $notices = [];
+    $cart = emptyCalculableCart();
+    stubWcWithCart($cart);
+    stubWooNotices($notices);
+    $cart->shouldReceive('get_cart_item_quantities')->andReturn([9 => 2]);
+    $cart->shouldReceive('add_to_cart')->andReturnUsing(static function (int $productId) use (&$notices): string|bool {
+      if ($productId === 1) {
+        return 'k1';
+      }
+
+      $notices[] = ['notice' => 'You cannot add that amount to the cart &mdash; we have 2 in stock and you already have 2 in your cart. <a href="/cart/" class="button wc-forward">View cart</a>', 'data' => []];
+
+      return false;
+    });
+
+    $product = Mockery::mock('WC_Product');
+    $product->shouldReceive('is_type')->andReturn(false);
+    $product->shouldReceive('is_purchasable')->andReturn(true);
+    $product->shouldReceive('is_in_stock')->andReturn(true);
+    $product->shouldReceive('get_stock_managed_by_id')->andReturn(9);
+    $product->shouldReceive('has_enough_stock')->with(3)->andReturn(false);
+    Functions\when('wc_get_product')->justReturn($product);
+
+    $reply = cartHost()->batchAddToCart(wooMakeRequest(['items' => [
+      ['product_id' => 1],
+      ['product_id' => 2],
+    ]]));
+    $body = $reply->getBody();
+
+    expect($body['success'])->toBeTrue()
+      ->and($body['results'][0]['success'])->toBeTrue()
+      ->and($body['results'][1])->toBe([
+        'index' => 1,
+        'success' => false,
+        'message' => 'You cannot add that amount to the cart — we have 2 in stock and you already have 2 in your cart.',
+        'code' => 'insufficient_stock',
+        'cart_item_key' => null,
+      ])
+      ->and($notices)->toBe([]);
+  });
+
+  it('persists the position of every added line, the last one included', function (): void {
+    $sessions = [];
+    $cart = sessionCart(['old' => ['product_id' => 3, 'quantity' => 1]], $sessions);
+    stubWcWithCart($cart);
+
+    $product = Mockery::mock('WC_Product');
+    Functions\when('wc_get_product')->justReturn($product);
+
+    $results = invokeHost(cartHost(), 'processBatchItems', [
+      ['product_id' => 1],
+      ['product_id' => 2],
+    ]);
+    $persisted = end($sessions);
+
+    expect(array_column($results, 'cart_item_key'))->toBe(['k1', 'k2'])
+      ->and(array_map(static fn (array $line): mixed => $line['position'] ?? null, $persisted))
+      ->toBe(['old' => 1.0, 'k1' => 2.0, 'k2' => 3.0]);
+  });
+
+  it('turns a non-array item into an invalid product result', function (): void {
+    stubWcWithCart(emptyCalculableCart());
+
+    $reply = cartHost()->batchAddToCart(wooMakeRequest(['items' => ['nope']]));
+
+    expect($reply->getBody()['results'][0]['message'])->toBe('Invalid product ID');
   });
 });
 
