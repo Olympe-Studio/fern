@@ -1009,6 +1009,7 @@ describe('resolveAdminActions', function (): void {
     (new ReflectionProperty(Action::class, 'current'))->setValue(null, $action);
 
     Filters\expectApplied('fern:core:action:can_run')->andReturn(true);
+    Functions\when('is_user_logged_in')->justReturn(true);
 
     $router = makeRouter();
 
@@ -1062,11 +1063,12 @@ describe('resolveAdminActions', function (): void {
     expect($router->resolveController('admin'))->toBeNull();
   });
 
-  it('passes the unresolved (null) admin controller down to handleActionRequest, which type-errors', function (): void {
+  it('answers 404 when no admin controller owns the action, instead of type-erroring', function (): void {
     $this->routerRoot = makeRouterRoot();
     writeRouterController($this->routerRoot, 'TypeErrAdminDefault', '_default');
 
     Functions\when('get_queried_object')->justReturn(new stdClass());
+    Functions\when('is_user_logged_in')->justReturn(true);
 
     $request = new RouterFakeRequest([
       'action' => true,
@@ -1079,9 +1081,38 @@ describe('resolveAdminActions', function (): void {
     $action->setName('orphanAction');
     (new ReflectionProperty(Action::class, 'current'))->setValue(null, $action);
 
+    $capture = haltReplySend();
     $router = makeRouter();
 
-    expect(fn (): mixed => $router->resolveAdminActions())->toThrow(TypeError::class);
+    expect(fn (): mixed => $router->resolveAdminActions())->toThrow(RouterHaltSend::class)
+      ->and((new ReflectionProperty(Reply::class, 'status'))->getValue($capture->reply))->toBe(404);
+  });
+
+  it('answers 404 to an anonymous admin action without resolving or running it', function (): void {
+    $this->routerRoot = makeRouterRoot();
+    $extra = "  use \\Fern\\Core\\Services\\Controller\\AdminController;\n  public function configure(): array { return ['page_title' => 'P', 'menu_title' => 'M']; }\n  public function adminAction(\\Fern\\Core\\Services\\HTTP\\Request \$request, \\Fern\\Core\\Services\\Actions\\Action \$action): \\Fern\\Core\\Services\\HTTP\\Reply { throw new \\LogicException('ran'); }\n";
+    writeRouterController($this->routerRoot, 'AnonAdmin', 'fern-anon', [], $extra);
+
+    Functions\when('get_queried_object')->justReturn(new stdClass());
+    Functions\when('is_user_logged_in')->justReturn(false);
+
+    $request = new RouterFakeRequest([
+      'action' => true,
+      'method' => 'POST',
+      'urlParams' => ['page' => 'fern-anon'],
+    ]);
+    $request->opts['body'] = ['action' => 'adminAction'];
+    bindRouterRequest($request);
+
+    $action = new Action($request);
+    $action->setName('adminAction');
+    (new ReflectionProperty(Action::class, 'current'))->setValue(null, $action);
+
+    $capture = haltReplySend();
+    $router = makeRouter();
+
+    expect(fn (): mixed => $router->resolveAdminActions())->toThrow(RouterHaltSend::class)
+      ->and((new ReflectionProperty(Reply::class, 'status'))->getValue($capture->reply))->toBe(404);
   });
 
   it('logs a missing action in dev mode and still resolves a null admin controller', function (): void {

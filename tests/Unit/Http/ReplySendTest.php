@@ -15,6 +15,27 @@ final class TerminatingReply extends Reply {
   protected function terminate(): never {
     throw new RuntimeException('terminated');
   }
+
+  protected function outputBufferFloor(): int {
+    return ob_get_level();
+  }
+}
+
+/**
+ * TerminatingReply that keeps the output buffers below a given level, as the test runner owns them.
+ */
+final class FlooredReply extends Reply {
+  public function __construct(mixed $body, private int $floor) {
+    parent::__construct(200, $body);
+  }
+
+  protected function outputBufferFloor(): int {
+    return $this->floor;
+  }
+
+  protected function terminate(): never {
+    throw new RuntimeException('terminated');
+  }
 }
 
 /**
@@ -121,6 +142,24 @@ describe('send', function (): void {
 
     expect($reply->getHeader('X-FERN-ACTION-REPLY'))->toBeTrue()
       ->and($result['terminated'])->toBeTrue();
+  });
+
+  it('sends an action reply body, dropping only the output buffered before it', function (): void {
+    bindRequest(true);
+    $baseLevel = ob_get_level();
+    ob_start();
+    $reply = new FlooredReply(['ok' => true], $baseLevel + 1);
+    ob_start();
+    echo 'stray notice';
+
+    try {
+      $reply->send();
+    } catch (RuntimeException) {
+    }
+
+    $output = ob_get_level() > $baseLevel ? (string) ob_get_clean() : '';
+
+    expect($output)->toBe('{"ok":true}');
   });
 
   it('does not set the action header for a regular request', function (): void {

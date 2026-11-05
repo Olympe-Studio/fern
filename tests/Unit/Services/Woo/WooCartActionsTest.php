@@ -1064,6 +1064,14 @@ describe('validateCoupon', function (): void {
     Functions\when('apply_filters')->alias(static fn (string $hook, mixed $value = null) => $value);
   });
 
+  it('is guarded so only editors and above can call it as an action', function (): void {
+    $attributes = (new ReflectionMethod(\Fern\Core\Services\Woo\WooCartActions::class, 'validateCoupon'))
+      ->getAttributes(\Fern\Core\Services\Actions\Attributes\RequireCapabilities::class);
+
+    expect($attributes)->toHaveCount(1)
+      ->and($attributes[0]->getArguments())->toBe([['edit_others_posts']]);
+  });
+
   it('returns invalid for an empty coupon code', function (): void {
     Functions\when('sanitize_text_field')->returnArg();
 
