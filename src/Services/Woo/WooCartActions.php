@@ -177,6 +177,7 @@ trait WooCartActions {
    *
    * Only available to editor+ users (used for share-cart links).
    */
+  #[RequireCapabilities(['edit_others_posts'])]
   public function validateCoupon(Request $request): Reply {
     $action = $request->getAction();
     $couponCode = sanitize_text_field((string) ($action->get('coupon') ?? ''));

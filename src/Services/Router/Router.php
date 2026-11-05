@@ -130,8 +130,18 @@ class Router extends Singleton {
     if ($this->shouldStop()) {
       return;
     }
-    /** @var class-string<Controller> $controller */
-    $controller = $this->resolveController('admin');
+
+    // admin_init also fires for visitors on admin-ajax.php and admin-post.php: admin actions
+    // are for logged-in users, and an action no admin controller owns is not found either.
+    /** @var class-string<Controller>|null $controller */
+    $controller = is_user_logged_in() ? $this->resolveController('admin') : null;
+
+    if ($controller === null) {
+      (new Reply(404, 'Not Found', 'text/plain'))->send();
+
+      return;
+    }
+
     $this->handleActionRequest($controller);
   }
 

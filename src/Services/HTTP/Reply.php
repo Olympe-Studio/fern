@@ -440,6 +440,12 @@ class Reply {
 
     $content = Types::getSafeString($content);
 
+    // An action reply carries only its own body: drop whatever earlier code buffered (notices,
+    // stray echoes, Query Monitor), before echoing, so the body itself is never discarded.
+    if ($req->isAction()) {
+      $this->discardBufferedOutput();
+    }
+
     $isChunked = $this->hasHeader('Transfer-Encoding') && $this->getHeader('Transfer-Encoding') === 'chunked';
 
     if ($isChunked) {
@@ -467,20 +473,31 @@ class Reply {
      */
     Events::trigger('fern:core:reply:has_been_sent', $this);
 
-    // For action requests, ensure clean exit without Query Monitor interference
-    if ($req->isAction()) {
-      // Clean any remaining output buffers
-      while (ob_get_level()) {
-        ob_end_clean();
-      }
-
-      // Force fast CGI to finish request if available
-      if (function_exists('fastcgi_finish_request')) {
-        fastcgi_finish_request();
-      }
+    // For action requests, end the request right away so nothing runs into the reply.
+    if ($req->isAction() && function_exists('fastcgi_finish_request')) {
+      fastcgi_finish_request();
     }
 
     $this->terminate();
+  }
+
+  /**
+   * Drops the output buffered before an action reply, down to the floor level.
+   */
+  private function discardBufferedOutput(): void {
+    while (ob_get_level() > $this->outputBufferFloor() && ob_end_clean()) {
+      continue;
+    }
+  }
+
+  /**
+   * The output buffer level an action reply keeps: 0 in a real request, so every earlier buffer
+   * is dropped. Isolated behind a method so tests can keep the buffers the test runner owns.
+   *
+   * @codeCoverageIgnore
+   */
+  protected function outputBufferFloor(): int {
+    return 0;
   }
 
   /**
